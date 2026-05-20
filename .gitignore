@@ -1,0 +1,9 @@
+.env
+__pycache__/
+*.pyc
+uploads/*
+outputs/*
+extracted_images/*
+!uploads/.gitkeep
+!outputs/.gitkeep
+!extracted_images/.gitkeep

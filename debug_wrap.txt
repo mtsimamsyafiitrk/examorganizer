@@ -1,0 +1,22 @@
+ARABIC_FONT = AppArabic
+
+INPUT: كَتَبَ
+has_arabic: True
+wrapped: <font name="AppArabic">ﺐﺘﻛ</font>
+format_text: <font name="AppArabic">ﺐﺘﻛ</font>
+
+INPUT: Penulisan kata "Madrosatun" (مَدْرَسَةٌ) yang benar adalah...
+has_arabic: True
+wrapped: Penulisan kata "Madrosatun" <font name="AppArabic">(ﺔﺳﺭﺪﻣ)</font> yang benar adalah...
+format_text: Penulisan kata "Madrosatun" <font name="AppArabic">(ﺔﺳﺭﺪﻣ)</font> yang benar adalah...
+
+INPUT: A. تَ
+has_arabic: True
+wrapped: A. <font name="AppArabic">ﺕ</font>
+format_text: A. <font name="AppArabic">ﺕ</font>
+
+INPUT: B. تـ
+has_arabic: True
+wrapped: B. <font name="AppArabic">ـﺗ</font>
+format_text: B. <font name="AppArabic">ـﺗ</font>
+
