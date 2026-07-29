@@ -2,7 +2,7 @@
 // Strategi: online-first dengan fallback cache untuk shell aplikasi.
 // Data aktual selalu diambil dari Firestore.
 
-const CACHE_VERSION = 'jm-v1';
+const CACHE_VERSION = 'jm-v2';
 const CACHE_NAME = `jurnal-mengajar-${CACHE_VERSION}`;
 
 const PRECACHE_URLS = [
@@ -13,6 +13,7 @@ const PRECACHE_URLS = [
   './js/constants.js',
   './js/utils.js',
   './js/ui-helpers.js',
+  './js/icons.js',
   './js/firebase.js',
   './assets/logo.png',
   './assets/icon.png',

@@ -39,8 +39,8 @@
       <div class="login-sub" id="login-school">MTs Al Imam Asy-Syafi'i Tarakan</div>
 
       <div class="tabbar" style="margin:18px 0 14px">
-        <button id="tab-role-guru" class="btn-tab active" onclick="setLoginRole('guru')">👨‍🏫 Guru</button>
-        <button id="tab-role-admin" class="btn-tab" onclick="setLoginRole('admin')">🛡️ Admin</button>
+        <button id="tab-role-guru" class="btn-tab active" onclick="setLoginRole('guru')"><span data-ico="user" data-size="15"></span> Guru</button>
+        <button id="tab-role-admin" class="btn-tab" onclick="setLoginRole('admin')"><span data-ico="shield" data-size="15"></span> Admin</button>
       </div>
 
       <div class="input-wrap">
@@ -50,7 +50,7 @@
       <div class="input-wrap">
         <label>Password</label>
         <input id="l-pass" class="input" type="password" placeholder="Masukkan password" autocomplete="current-password"/>
-        <button class="eye" onclick="togglePw('l-pass',this)">👁️</button>
+        <button class="eye" data-ico="eye" data-size="16" onclick="togglePw('l-pass',this)"></button>
       </div>
       <div id="login-err" class="err-msg"></div>
       <button class="btn btn-sage" style="width:100%;padding:13px;font-size:14px" onclick="doLogin()">Masuk</button>
@@ -62,12 +62,12 @@
 <div id="screen-guru" class="screen">
   <div class="header">
     <div class="hinner">
-      <div class="logo-gem">📖</div>
+      <div class="logo-gem" data-ico="book-open" data-size="24"></div>
       <div style="flex:1;min-width:0">
         <div class="app-title">Jurnal Mengajar</div>
         <div class="app-sub" id="g-header-sub"></div>
       </div>
-      <button class="btn-icon" title="Keluar" onclick="doLogout()">🚪</button>
+      <button class="btn-icon" title="Keluar" data-ico="logout" data-size="20" onclick="doLogout()"></button>
     </div>
   </div>
   <div class="body">
@@ -75,7 +75,7 @@
 
     <div id="page-g-jurnal" class="page">
       <div class="card card-sage">
-        <div class="section-title" id="g-jurnal-form-title">📝 Isi Jurnal Mengajar</div>
+        <div class="section-title" id="g-jurnal-form-title"><span data-ico="pen"></span> Isi Jurnal Mengajar</div>
         <div class="grid2">
           <div class="input-wrap"><label>Tanggal</label><input id="j-tanggal" class="input" type="date"/></div>
           <div class="input-wrap"><label>Jam ke</label><input id="j-jamke" class="input" placeholder="cth: 1-2"/></div>
@@ -93,7 +93,7 @@
         </div>
 
         <div class="input-wrap">
-          <label>💚 Integrasi Nilai Cinta (KBC)</label>
+          <label>Integrasi Nilai Cinta (KBC)</label>
           <div id="j-kbc" class="kbc-wrap"></div>
         </div>
         <div class="input-wrap"><label>Wujud Penerapan Nilai Cinta</label><textarea id="j-kbc-catatan" class="input" rows="2" placeholder="cth: Membuka pelajaran dengan doa & murajaah, menjaga kebersihan kelas..."></textarea></div>
@@ -101,17 +101,17 @@
       </div>
 
       <div class="card">
-        <div class="section-title">✅ Absensi Siswa <span id="absen-counter" class="badge-mini"></span></div>
+        <div class="section-title"><span data-ico="check-square"></span> Absensi Siswa <span id="absen-counter" class="badge-mini"></span></div>
         <div class="hint">Pilih rombel di atas, lalu tandai status tiap siswa. Default: Hadir.</div>
         <div style="display:flex;gap:8px;margin:10px 0">
-          <button class="btn-ghost" onclick="setSemuaAbsen('H')">✔️ Semua Hadir</button>
+          <button class="btn-ghost" onclick="setSemuaAbsen('H')"><span data-ico="check" data-size="14"></span> Semua Hadir</button>
         </div>
         <div id="absen-list"></div>
       </div>
 
       <div style="display:flex;gap:10px">
         <button id="j-batal" class="btn btn-gray" style="flex:1;display:none" onclick="resetJurnalForm()">Batal</button>
-        <button class="btn btn-sage" style="flex:2;padding:13px;font-size:14px" onclick="simpanJurnal()">💾 Simpan Jurnal</button>
+        <button class="btn btn-sage" style="flex:2;padding:13px;font-size:14px" onclick="simpanJurnal()"><span data-ico="save" data-size="15"></span> Simpan Jurnal</button>
       </div>
     </div>
 
@@ -121,11 +121,11 @@
   </div>
 
   <nav class="navbar">
-    <button class="nav-btn active" data-page="home" onclick="gNav('home')"><span>🏠</span>Beranda</button>
-    <button class="nav-btn" data-page="jurnal" onclick="gNav('jurnal')"><span>📝</span>Jurnal</button>
-    <button class="nav-btn" data-page="riwayat" onclick="gNav('riwayat')"><span>📚</span>Riwayat</button>
-    <button class="nav-btn" data-page="rekap" onclick="gNav('rekap')"><span>📊</span>Rekap</button>
-    <button class="nav-btn" data-page="akun" onclick="gNav('akun')"><span>👤</span>Akun</button>
+    <button class="nav-btn active" data-page="home" onclick="gNav('home')"><span data-ico="home" data-size="20"></span>Beranda</button>
+    <button class="nav-btn" data-page="jurnal" onclick="gNav('jurnal')"><span data-ico="pen" data-size="20"></span>Jurnal</button>
+    <button class="nav-btn" data-page="riwayat" onclick="gNav('riwayat')"><span data-ico="book" data-size="20"></span>Riwayat</button>
+    <button class="nav-btn" data-page="rekap" onclick="gNav('rekap')"><span data-ico="chart" data-size="20"></span>Rekap</button>
+    <button class="nav-btn" data-page="akun" onclick="gNav('akun')"><span data-ico="user" data-size="20"></span>Akun</button>
   </nav>
 </div>
 
@@ -133,12 +133,12 @@
 <div id="screen-admin" class="screen">
   <div class="header">
     <div class="hinner">
-      <div class="logo-gem">🛡️</div>
+      <div class="logo-gem" data-ico="shield" data-size="24"></div>
       <div style="flex:1;min-width:0">
         <div class="app-title">Panel Admin</div>
         <div class="app-sub" id="a-header-sub">Jurnal Mengajar Guru</div>
       </div>
-      <button class="btn-icon" title="Keluar" onclick="doLogout()">🚪</button>
+      <button class="btn-icon" title="Keluar" data-ico="logout" data-size="20" onclick="doLogout()"></button>
     </div>
   </div>
   <div class="body">
@@ -151,12 +151,12 @@
   </div>
 
   <nav class="navbar">
-    <button class="nav-btn active" data-page="home" onclick="aNav('home')"><span>🏠</span>Beranda</button>
-    <button class="nav-btn" data-page="guru" onclick="aNav('guru')"><span>👨‍🏫</span>Guru</button>
-    <button class="nav-btn" data-page="siswa" onclick="aNav('siswa')"><span>🧑‍🎓</span>Siswa</button>
-    <button class="nav-btn" data-page="jurnal" onclick="aNav('jurnal')"><span>📖</span>Jurnal</button>
-    <button class="nav-btn" data-page="rekap" onclick="aNav('rekap')"><span>📊</span>Rekap</button>
-    <button class="nav-btn" data-page="set" onclick="aNav('set')"><span>⚙️</span>Setelan</button>
+    <button class="nav-btn active" data-page="home" onclick="aNav('home')"><span data-ico="home" data-size="20"></span>Beranda</button>
+    <button class="nav-btn" data-page="guru" onclick="aNav('guru')"><span data-ico="users" data-size="20"></span>Guru</button>
+    <button class="nav-btn" data-page="siswa" onclick="aNav('siswa')"><span data-ico="grad" data-size="20"></span>Siswa</button>
+    <button class="nav-btn" data-page="jurnal" onclick="aNav('jurnal')"><span data-ico="clipboard" data-size="20"></span>Jurnal</button>
+    <button class="nav-btn" data-page="rekap" onclick="aNav('rekap')"><span data-ico="chart" data-size="20"></span>Rekap</button>
+    <button class="nav-btn" data-page="set" onclick="aNav('set')"><span data-ico="sliders" data-size="20"></span>Setelan</button>
   </nav>
 </div>
 
@@ -197,12 +197,12 @@
 <!-- Modal upload siswa -->
 <div id="modal-upload" class="modal">
   <div class="modal-box">
-    <div class="modal-title">📤 Upload Data Siswa</div>
+    <div class="modal-title"><span data-ico="upload" data-size="17"></span> Upload Data Siswa</div>
     <div class="hint" style="margin-bottom:10px">
       File Excel (.xlsx) dengan kolom: <b>Nama</b>, <b>Rombel</b>, <b>NISN</b> (baris pertama = judul kolom).
       Data akan <b>ditambahkan</b> ke daftar; NISN yang sudah ada akan diperbarui.
     </div>
-    <button class="btn-ghost" style="width:100%;margin-bottom:10px" onclick="downloadTemplateSiswa()">⬇️ Unduh Template Excel</button>
+    <button class="btn-ghost" style="width:100%;margin-bottom:10px" onclick="downloadTemplateSiswa()"><span data-ico="download" data-size="14"></span> Unduh Template Excel</button>
     <input id="up-file" type="file" accept=".xlsx,.xls,.csv" class="input" style="padding:9px"/>
     <div id="up-preview" class="hint" style="margin-top:8px"></div>
     <div class="modal-btns">
@@ -215,10 +215,21 @@
 <!-- Modal detail jurnal -->
 <div id="modal-jurnal" class="modal">
   <div class="modal-box modal-lg">
-    <div class="modal-title">📖 Detail Jurnal</div>
+    <div class="modal-title"><span data-ico="book-open" data-size="17"></span> Detail Jurnal</div>
     <div id="mj-body"></div>
     <div class="modal-btns">
       <button class="btn btn-gray" style="width:100%" onclick="closeModal('modal-jurnal')">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal kelola rombel -->
+<div id="modal-rombel" class="modal">
+  <div class="modal-box modal-lg">
+    <div class="modal-title" id="mr-title">Kelola Rombel</div>
+    <div id="mr-body"></div>
+    <div class="modal-btns">
+      <button class="btn btn-gray" style="width:100%" onclick="closeModal('modal-rombel')">Tutup</button>
     </div>
   </div>
 </div>
