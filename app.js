@@ -821,7 +821,43 @@ function renderASiswa() {
           <button class="btn-icon" onclick="openModalSiswa('${s.id}')">${ico('pencil',16)}</button>
           <button class="btn-icon" onclick="hapusSiswa('${s.id}')">${ico('trash',16)}</button>
         </div>`).join('') : `<div class="empty">Belum ada data siswa.<br>Gunakan tombol Upload untuk impor dari Excel.</div>`}
+    </div>
+    <div class="card">
+      <div class="section-title" style="justify-content:space-between">
+        <span>${ico('clipboard',15)} Rekap Data Siswa${filter ? ` — ${esc(filter)}` : ''}</span>
+        <button class="btn-ghost" onclick="exportDataSiswa()">${ico('download',13)} Ekspor Excel</button>
+      </div>
+      <div class="hint" style="margin-bottom:8px">Mengikuti filter rombel di atas. Ekspor mengunduh data yang sedang ditampilkan.</div>
+      ${list.length ? `
+      <div class="table-wrap"><table class="tbl">
+        <tr><th>No</th><th>Nama</th><th>Rombel</th><th>NISN</th></tr>
+        ${list.map((s, i) => `
+        <tr>
+          <td class="num">${i + 1}</td>
+          <td style="font-weight:800">${esc(s.nama)}</td>
+          <td class="num">${esc(s.rombel)}</td>
+          <td>${esc(s.nisn || '-')}</td>
+        </tr>`).join('')}
+      </table></div>` : `<div class="empty">Belum ada data siswa.</div>`}
     </div>`;
+}
+
+async function exportDataSiswa() {
+  const filter = document.getElementById('page-a-siswa').dataset.rombel || '';
+  const list = filter ? siswaByRombel(filter) : siswaList;
+  if (!list.length) { showToast('Belum ada data siswa.', false); return; }
+  showLoading('Menyiapkan ekspor...');
+  try {
+    const XLSX = await ensureXLSX();
+    const rows = list.map((s, i) => ({ No: i + 1, Nama: s.nama, Rombel: s.rombel, NISN: s.nisn || '' }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = [{ wch: 5 }, { wch: 32 }, { wch: 9 }, { wch: 15 }];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, filter ? `Siswa ${filter}` : 'Semua Siswa');
+    xlsxDownload(wb, `rekap_data_siswa${filter ? '_' + filter : ''}_${dk()}.xlsx`);
+    showToast(`Data ${list.length} siswa diekspor.`);
+  } catch (e) { console.error(e); showToast('Gagal ekspor.', false); }
+  hideLoading();
 }
 function aSiswaFilter(v) {
   document.getElementById('page-a-siswa').dataset.rombel = v;
@@ -1418,7 +1454,7 @@ Object.assign(window, {
   renderAbsenList, setAbsen, setSemuaAbsen, toggleKbc, simpanJurnal, resetJurnalForm,
   editJurnal, hapusJurnal, lihatJurnal, gRiwayatBulan, simpanProfilGuru,
   openModalGuru, toggleMgMapel, simpanGuru, resetPwGuru, hapusGuru,
-  exportDataGuru,
+  exportDataGuru, exportDataSiswa,
   aSiswaFilter, openModalSiswa, simpanSiswa, hapusSiswa, hapusSiswaRombel,
   openModalUpload, downloadTemplateSiswa, prosesUploadSiswa,
   aJurnalTgl, aJurnalGuru, exportJurnalBulan,
