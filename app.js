@@ -18,6 +18,14 @@
 //                     kbc[], kbcCatatan, refleksi,
 //                     absen{siswaId:H|S|I|A}, rekap{H,S,I,A},
 //                     createdAt, updatedAt}
+//  jm_nilai/{id}     satu dokumen = satu kolom penilaian (satu kali penilaian)
+//                    {guruId, mapel, rombel, tahunPelajaran, semester,
+//                     jenis:'formatif'|'sumatif'|'sas', nama, urut,
+//                     nilai{siswaId: 0..100}, createdAt, updatedAt}
+//
+// Catatan penilaian: aplikasi ini alat bantu guru, BUKAN pengganti RDM.
+// Struktur jenis penilaian & urutan siswa sengaja dibuat mengikuti RDM agar
+// hasilnya bisa disalin per kolom ke template Excel RDM tanpa tergeser.
 // ═══════════════════════════════════════════════════════════════
 
 import {
@@ -25,9 +33,13 @@ import {
 } from "./js/firebase.js";
 import {
   MONTHS, TODAY, ADMIN_DEFAULT_PW, GURU_DEFAULT_PW,
-  KBC_VALUES, METODE_LIST, ASESMEN_LIST, ABSEN_STATUS, ABSEN_MAP, DEFAULT_SEKOLAH
+  KBC_VALUES, METODE_LIST, ASESMEN_LIST, ABSEN_STATUS, ABSEN_MAP, DEFAULT_SEKOLAH,
+  NILAI_JENIS, NILAI_JENIS_MAP, URUT_SISWA
 } from "./js/constants.js";
-import { hashPw, uid, dk, esc, fmtTanggal, cmpRombel, cmpNama, hitungRekap } from "./js/utils.js";
+import {
+  hashPw, uid, dk, esc, fmtTanggal, cmpRombel, cmpNama, hitungRekap,
+  num, rata, bulat, kktpDari, urutkanSiswa, deskripsiCapaian
+} from "./js/utils.js";
 import { showLoading, hideLoading, showToast, showScreen, openModal, closeModal, togglePw } from "./js/ui-helpers.js";
 import { ico, initIcons } from "./js/icons.js";
 import { buildJurnalBulananPDF, namaFilePDF, namaBulan, pdfDownload } from "./js/pdf-jurnal.js";
@@ -45,6 +57,9 @@ let editGuruId = null;
 let editSiswaId = null;
 let mgMapelState = new Set();  // mapel terpilih di modal guru
 let aSetState = null;          // salinan pengaturan sekolah saat diedit
+let nilaiList = [];            // dokumen jm_nilai milik guru yang login
+let nilaiInputState = {};      // {siswaId: '' | angka} saat mengisi satu kolom penilaian
+let nilaiDirty = false;        // ada isian nilai yang belum disimpan
 
 const SESSION_KEY = 'jm_session';
 
@@ -77,6 +92,10 @@ async function jurnalByGuru(guruId) {
 async function jurnalByTanggal(dateKey) {
   const snap = await getDocs(query(collection(fs, 'jm_jurnal'), where('tanggal', '==', dateKey)));
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+async function loadNilai(guruId) {
+  const snap = await getDocs(query(collection(fs, 'jm_nilai'), where('guruId', '==', guruId)));
+  nilaiList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 async function jurnalByRange(start, end) {
   const snap = await getDocs(query(collection(fs, 'jm_jurnal'),
@@ -191,6 +210,10 @@ async function enterApp() {
       `${currentUser.nama} · TP ${sekolah.tahunPelajaran} ${sekolah.semester}`;
     showScreen('guru');
     initJurnalForm();
+    // Bersihkan filter & cache nilai milik sesi sebelumnya.
+    nilaiList = [];
+    nilaiInputState = {}; nilaiDirty = false;
+    for (const k of ['loaded', 'rombel', 'mapel', 'open', 'jenis']) delete nilaiPage().dataset[k];
     gNav('home');
   }
 }
@@ -207,6 +230,7 @@ function gNav(page) {
   navTo('guru', page);
   if (page === 'home') renderGHome();
   if (page === 'riwayat') renderGRiwayat();
+  if (page === 'nilai') renderGNilai();
   if (page === 'rekap') renderGRekap();
   if (page === 'akun') renderGAkun();
 }
@@ -502,6 +526,429 @@ function hapusJurnal(id) {
 }
 
 // ═══════════════════ GURU: REKAP & AKUN ═══════════════════
+// ═══════════════════ GURU: NILAI ═══════════════════
+// Alat bantu penyiapan nilai untuk diinput ke RDM — bukan pengganti rapor.
+// Satu dokumen jm_nilai = satu kolom penilaian di RDM. Guru membuat kolom
+// (mis. "Lingkup 1 — Bilangan Bulat"), mengisi nilai seluruh siswa, lalu
+// menyalin per kolom atau mengekspor Excel dengan urutan siswa yang sudah
+// disamakan dengan template RDM.
+
+function nilaiPage() { return document.getElementById('page-g-nilai'); }
+
+function nilaiCtx() {
+  const el = nilaiPage();
+  return { rombel: el.dataset.rombel || '', mapel: el.dataset.mapel || '', open: el.dataset.open || '' };
+}
+
+// Kolom penilaian untuk rombel+mapel pada TP & semester yang sedang berjalan.
+function kolomNilai(rombel, mapel) {
+  return nilaiList
+    .filter(n => n.rombel === rombel && n.mapel === mapel
+      && n.tahunPelajaran === sekolah.tahunPelajaran && n.semester === sekolah.semester)
+    .sort((a, b) => (a.urut || 0) - (b.urut || 0) || String(a.nama).localeCompare(String(b.nama), 'id'));
+}
+
+// Batas tuntas KKTP berlaku per mapel — Matematika dan Akidah Akhlak wajar
+// berbeda. Mapel yang tidak diatur khusus mengikuti default madrasah.
+function kktpUntuk(mapel) {
+  return num(sekolah.kktpMapel?.[mapel]) ?? num(sekolah.kktpMin) ?? 70;
+}
+
+function bobotNilai() {
+  const b = { ...DEFAULT_SEKOLAH.bobot, ...(sekolah.bobot || {}) };
+  return { formatif: num(b.formatif) ?? 0, sumatif: num(b.sumatif) ?? 0, sas: num(b.sas) ?? 0 };
+}
+
+// NA memakai bobot dari Setelan. Komponen yang belum ada nilainya diabaikan
+// dan bobotnya dinormalkan ulang, agar NA tetap wajar di tengah semester.
+function hitungNA(rf, rs, sas) {
+  const b = bobotNilai();
+  const bagian = [[rf, b.formatif], [rs, b.sumatif], [sas, b.sas]].filter(([v, w]) => v !== null && w > 0);
+  const total = bagian.reduce((a, [, w]) => a + w, 0);
+  if (!total) return null;
+  return bagian.reduce((a, [v, w]) => a + v * w, 0) / total;
+}
+
+function hitungLeger(rombel, mapel) {
+  const kolom = kolomNilai(rombel, mapel);
+  const grup = { formatif: [], sumatif: [], sas: [] };
+  for (const k of kolom) if (grup[k.jenis]) grup[k.jenis].push(k);
+  const siswa = urutkanSiswa(siswaByRombel(rombel), sekolah.urutSiswa);
+  const kktpMin = kktpUntuk(mapel);
+  const baris = siswa.map(s => {
+    const val = k => num(k.nilai?.[s.id]);
+    const rf = rata(grup.formatif.map(val));
+    const rs = rata(grup.sumatif.map(val));
+    const sas = grup.sas.length ? val(grup.sas[0]) : null;
+    const na = hitungNA(rf, rs, sas);
+    // Deskripsi bersumber dari sumatif lingkup materi (itu yang masuk rapor);
+    // selama sumatif belum ada, formatif dipakai agar guru tetap punya bahan.
+    const sumber = grup.sumatif.length ? grup.sumatif : grup.formatif;
+    return {
+      s, rf, rs, sas, na,
+      // Predikat mengikuti NA yang dibulatkan — angka itulah yang dilaporkan
+      // ke RDM, sehingga angka dan predikat yang dilihat guru selalu sejalan.
+      predikat: kktpDari(bulat(na), kktpMin),
+      deskripsi: deskripsiCapaian(sumber.map(k => ({ nama: k.nama, nilai: val(k) })), kktpMin),
+    };
+  });
+  return { kolom, grup, siswa, baris, kktpMin };
+}
+
+async function renderGNilai() {
+  const el = nilaiPage();
+  if (!el.dataset.loaded) {
+    el.innerHTML = `<div class="empty">Memuat...</div>`;
+    try {
+      await loadNilai(currentUser.id);
+      el.dataset.loaded = '1';
+    } catch (e) {
+      console.error(e);
+      el.innerHTML = `<div class="empty">Gagal memuat data nilai. Periksa koneksi.</div>`;
+      return;
+    }
+  }
+  if (nilaiCtx().open) renderNilaiInput(); else renderNilaiIndex();
+}
+
+function nilaiFilter(key, val) {
+  const el = nilaiPage();
+  el.dataset[key] = val;
+  el.dataset.open = '';
+  renderGNilai();
+}
+
+function renderNilaiIndex() {
+  const el = nilaiPage();
+  const { rombel, mapel } = nilaiCtx();
+  const mapelOpts = currentUser.mapel?.length ? currentUser.mapel : sekolah.mapel;
+  el.innerHTML = `
+    <div class="card card-sage">
+      <div class="section-title">${ico('star', 15)} Nilai Siswa</div>
+      <div class="hint" style="margin-bottom:10px">
+        Alat bantu menyiapkan nilai sebelum diinput ke <b>RDM</b>. Satu penilaian di sini
+        sama dengan satu kolom di RDM. Aktif untuk TP <b>${esc(sekolah.tahunPelajaran)}</b>
+        semester <b>${esc(sekolah.semester)}</b>.
+      </div>
+      <div class="filter-row" style="margin-bottom:0">
+        <select class="input" onchange="nilaiFilter('rombel',this.value)">
+          <option value="">— pilih rombel —</option>
+          ${rombelListSiswa().map(r => `<option value="${esc(r)}" ${r === rombel ? 'selected' : ''}>${esc(r)}</option>`).join('')}
+        </select>
+        <select class="input" onchange="nilaiFilter('mapel',this.value)">
+          <option value="">— pilih mapel —</option>
+          ${mapelOpts.map(m => `<option value="${esc(m)}" ${m === mapel ? 'selected' : ''}>${esc(m)}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+    ${rombel && mapel
+      ? blokDaftarPenilaian(rombel, mapel) + blokLeger(rombel, mapel)
+      : `<div class="card"><div class="empty">Pilih rombel dan mata pelajaran untuk mulai menilai.</div></div>`}`;
+}
+
+function blokDaftarPenilaian(rombel, mapel) {
+  const { grup, siswa } = hitungLeger(rombel, mapel);
+  if (!siswa.length) {
+    return `<div class="card"><div class="empty">Belum ada data siswa untuk rombel ${esc(rombel)}.<br>Hubungi admin untuk mengunggah data siswa.</div></div>`;
+  }
+  return `
+    <div class="card">
+      <div class="section-title" style="justify-content:space-between">
+        <span>${ico('clipboard', 15)} Daftar Penilaian</span>
+        <span class="badge-mini">${siswa.length} siswa</span>
+      </div>
+      ${NILAI_JENIS.map(j => {
+        const list = grup[j.key] || [];
+        // SAS hanya satu per mapel per semester, sesuai RDM.
+        const bisaTambah = j.key !== 'sas' || !list.length;
+        return `
+        <div style="margin-bottom:14px">
+          <div style="font-size:12px;font-weight:800;margin-bottom:4px">${esc(j.label)}</div>
+          ${list.map(k => {
+            const terisi = Object.values(k.nilai || {}).filter(v => num(v) !== null).length;
+            const lengkap = terisi === siswa.length;
+            return `<div class="item">
+              <div class="grow" style="cursor:pointer" onclick="bukaNilai('${k.id}')">
+                <div class="t1">${esc(k.nama)}</div>
+                <div class="t2" style="color:${lengkap ? '#5a9b86' : ''}">${terisi}/${siswa.length} siswa terisi</div>
+              </div>
+              <button class="btn-icon" title="Salin kolom nilai" onclick="salinKolom('${k.id}')">${ico('copy', 16)}</button>
+              <button class="btn-icon" title="Isi / ubah nilai" onclick="bukaNilai('${k.id}')">${ico('pencil', 16)}</button>
+              <button class="btn-icon" title="Hapus penilaian" onclick="hapusNilai('${k.id}')">${ico('trash', 16)}</button>
+            </div>`;
+          }).join('') || `<div class="hint" style="padding:2px 0 6px">Belum ada.</div>`}
+          ${bisaTambah ? `<button class="btn-ghost" onclick="bukaNilai('baru','${j.key}')">${ico('plus', 13)} Tambah ${esc(j.label)}</button>` : ''}
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+function blokLeger(rombel, mapel) {
+  const { kolom, baris, kktpMin } = hitungLeger(rombel, mapel);
+  if (!baris.length) return '';
+  if (!kolom.length) {
+    return `<div class="card"><div class="empty">Belum ada penilaian. Tambahkan penilaian di atas untuk mulai mengisi nilai.</div></div>`;
+  }
+  const b = bobotNilai();
+  const angka = v => (v === null ? '–' : bulat(v));
+  return `
+    <div class="card">
+      <div class="section-title" style="justify-content:space-between">
+        <span>${ico('chart', 15)} Leger &amp; Deskripsi</span>
+        <button class="btn-ghost" onclick="exportNilai()">${ico('download', 13)} Ekspor Excel</button>
+      </div>
+      <div class="hint" style="margin-bottom:8px">
+        NA = ${b.formatif}% Formatif + ${b.sumatif}% Sumatif LM + ${b.sas}% SAS ·
+        batas tuntas KKTP ${esc(mapel)}: <b>${kktpMin}</b>.
+        Bobot &amp; KKTP diatur admin di menu Setelan — samakan dengan menu <b>Bobot</b> di RDM.
+        Komponen yang belum dinilai tidak ikut dihitung.
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="btn-ghost" onclick="salinKolom('na')">${ico('copy', 13)} Salin kolom NA</button>
+        <button class="btn-ghost" onclick="salinKolom('deskripsi')">${ico('copy', 13)} Salin kolom deskripsi</button>
+      </div>
+      <div class="table-wrap"><table class="tbl">
+        <tr><th>#</th><th>Nama</th><th class="num">F</th><th class="num">SLM</th><th class="num">SAS</th>
+            <th class="num">NA</th><th class="num">Predikat</th><th>Deskripsi</th></tr>
+        ${baris.map((r, i) => `<tr>
+          <td>${i + 1}</td>
+          <td>${esc(r.s.nama)}</td>
+          <td class="num">${angka(r.rf)}</td>
+          <td class="num">${angka(r.rs)}</td>
+          <td class="num">${angka(r.sas)}</td>
+          <td class="num" style="font-weight:900">${angka(r.na)}</td>
+          <td class="num">${r.predikat ? `<span class="predikat" style="background:${r.predikat.color}" title="${esc(r.predikat.label)}">${r.predikat.kode}</span>` : '–'}</td>
+          <td class="desk-cell">${esc(r.deskripsi) || '<span style="color:var(--muted)">–</span>'}</td>
+        </tr>`).join('')}
+      </table></div>
+    </div>`;
+}
+
+// ── Isi nilai satu kolom ──
+function bukaNilai(id, jenis) {
+  const el = nilaiPage();
+  const { rombel } = nilaiCtx();
+  const k = id === 'baru' ? null : nilaiList.find(x => x.id === id);
+  nilaiInputState = {};
+  for (const s of siswaByRombel(rombel)) {
+    const v = k ? num(k.nilai?.[s.id]) : null;
+    nilaiInputState[s.id] = v === null ? '' : String(v);
+  }
+  nilaiDirty = false;
+  el.dataset.open = id;
+  if (jenis) el.dataset.jenis = jenis;
+  renderGNilai();
+}
+
+function jumlahTerisi() {
+  return Object.values(nilaiInputState).filter(v => num(v) !== null).length;
+}
+
+function renderNilaiInput() {
+  const el = nilaiPage();
+  const { rombel, mapel, open } = nilaiCtx();
+  const baru = open === 'baru';
+  const k = baru ? null : nilaiList.find(x => x.id === open);
+  if (!baru && !k) { el.dataset.open = ''; renderNilaiIndex(); return; }
+  const jenis = baru ? (el.dataset.jenis || 'formatif') : k.jenis;
+  const j = NILAI_JENIS_MAP[jenis] || NILAI_JENIS[0];
+  const siswa = urutkanSiswa(siswaByRombel(rombel), sekolah.urutSiswa);
+  el.innerHTML = `
+    <div class="card card-sage">
+      <div class="section-title" style="justify-content:space-between">
+        <span>${ico(baru ? 'plus' : 'pencil', 15)} ${baru ? 'Penilaian Baru' : 'Ubah Penilaian'}</span>
+        <span class="badge-mini">${esc(rombel)} · ${esc(mapel)}</span>
+      </div>
+      <div class="input-wrap">
+        <label>Jenis Penilaian</label>
+        <select id="nk-jenis" class="input" ${baru ? '' : 'disabled'}>
+          ${NILAI_JENIS.map(x => `<option value="${x.key}" ${x.key === jenis ? 'selected' : ''}>${esc(x.label)}</option>`).join('')}
+        </select>
+      </div>
+      <div class="input-wrap">
+        <label>Nama Penilaian</label>
+        <input id="nk-nama" class="input" value="${esc(k ? k.nama : '')}" placeholder="${esc(j.contoh)}"/>
+      </div>
+      <div class="hint">Nama ini muncul sebagai judul kolom saat diekspor — pakai nama yang sama dengan di RDM agar mudah dicocokkan.</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title" style="justify-content:space-between">
+        <span>${ico('star', 15)} Isian Nilai</span>
+        <span class="badge-mini" id="nilai-terisi">${jumlahTerisi()}/${siswa.length} terisi</span>
+      </div>
+      <div class="hint">Skala 0–100. Kosongkan bila siswa belum dinilai — nilai kosong tidak ikut dihitung.</div>
+      <div style="margin:10px 0">
+        ${siswa.map((s, i) => `
+        <div class="absen-row">
+          <div style="width:22px;text-align:right;font-size:12px;font-weight:800;color:var(--muted)">${i + 1}</div>
+          <div class="absen-nama">${esc(s.nama)}<div class="absen-nisn">NISN ${esc(s.nisn || '-')}</div></div>
+          <input class="input nilai-inp" type="number" min="0" max="100" inputmode="numeric"
+            value="${esc(nilaiInputState[s.id] ?? '')}"
+            oninput="setNilaiInput('${s.id}',this.value)" onchange="normalNilai('${s.id}',this)"/>
+        </div>`).join('') || '<div class="empty">Belum ada data siswa untuk rombel ini.</div>'}
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-gray" style="flex:1" onclick="tutupNilaiInput()">Batal</button>
+      <button class="btn btn-sage" style="flex:2;padding:13px;font-size:14px" onclick="simpanNilaiKolom()">${ico('save', 15)} Simpan Nilai</button>
+    </div>`;
+}
+
+function setNilaiInput(sid, val) {
+  nilaiInputState[sid] = val;
+  nilaiDirty = true;
+  const badge = document.getElementById('nilai-terisi');
+  if (badge) badge.textContent = `${jumlahTerisi()}/${Object.keys(nilaiInputState).length} terisi`;
+}
+
+// Rapikan isian saat kursor meninggalkan kotak: bulat & dijepit ke 0–100.
+function normalNilai(sid, inp) {
+  const n = num(inp.value);
+  if (n === null) { inp.value = ''; setNilaiInput(sid, ''); return; }
+  const v = Math.min(100, Math.max(0, Math.round(n)));
+  inp.value = String(v);
+  setNilaiInput(sid, String(v));
+}
+
+function tutupNilaiInput() {
+  const tutup = () => { nilaiDirty = false; nilaiPage().dataset.open = ''; renderGNilai(); };
+  if (nilaiDirty) {
+    confirmAction('Batalkan Pengisian',
+      'Ada nilai yang belum disimpan. Tinggalkan halaman ini dan buang perubahannya?', tutup);
+    return;
+  }
+  tutup();
+}
+
+async function simpanNilaiKolom() {
+  const el = nilaiPage();
+  const { rombel, mapel, open } = nilaiCtx();
+  const nama = document.getElementById('nk-nama').value.trim();
+  if (!nama) { showToast('Nama penilaian wajib diisi.', false); return; }
+  const lama = open === 'baru' ? null : nilaiList.find(x => x.id === open);
+  const jenis = lama ? lama.jenis : document.getElementById('nk-jenis').value;
+  const nilai = {};
+  for (const [sid, v] of Object.entries(nilaiInputState)) {
+    const n = num(v);
+    if (n !== null) nilai[sid] = Math.min(100, Math.max(0, Math.round(n)));
+  }
+  const now = Date.now();
+  const data = {
+    guruId: currentUser.id, mapel, rombel,
+    tahunPelajaran: sekolah.tahunPelajaran, semester: sekolah.semester,
+    jenis, nama, nilai,
+    urut: lama?.urut ?? kolomNilai(rombel, mapel).filter(x => x.jenis === jenis).length + 1,
+    createdAt: lama?.createdAt || now,
+    updatedAt: now,
+  };
+  showLoading('Menyimpan nilai...');
+  try {
+    const id = open === 'baru' ? uid() : open;
+    await setDoc(doc(fs, 'jm_nilai', id), data);
+    const idx = nilaiList.findIndex(x => x.id === id);
+    if (idx >= 0) nilaiList[idx] = { id, ...data }; else nilaiList.push({ id, ...data });
+    nilaiDirty = false;
+    el.dataset.open = '';
+    hideLoading();
+    showToast(`Nilai "${nama}" tersimpan.`);
+    renderGNilai();
+    return;
+  } catch (e) { console.error(e); showToast('Gagal menyimpan nilai.', false); }
+  hideLoading();
+}
+
+function hapusNilai(id) {
+  const k = nilaiList.find(x => x.id === id);
+  if (!k) return;
+  confirmAction('Hapus Penilaian',
+    `Hapus penilaian <b>${esc(k.nama)}</b> beserta seluruh nilai siswa di dalamnya? Tindakan ini tidak bisa dibatalkan.`,
+    async () => {
+      showLoading('Menghapus...');
+      try {
+        await deleteDoc(doc(fs, 'jm_nilai', id));
+        nilaiList = nilaiList.filter(x => x.id !== id);
+        showToast('Penilaian dihapus.');
+        renderGNilai();
+      } catch (e) { console.error(e); showToast('Gagal menghapus.', false); }
+      hideLoading();
+    });
+}
+
+// ── Salin & ekspor ──
+// Disalin satu nilai per baris, urut sesuai urutan siswa terpilih, supaya bisa
+// langsung di-paste ke satu kolom template Excel RDM.
+async function salinTeks(teks, pesan) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(teks);
+    } else {
+      const ta = document.createElement('textarea');
+      ta.value = teks;
+      ta.style.cssText = 'position:fixed;opacity:0';
+      document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); ta.remove();
+    }
+    showToast(pesan);
+  } catch (e) { console.error(e); showToast('Gagal menyalin ke papan klip.', false); }
+}
+
+function salinKolom(id) {
+  const { rombel, mapel } = nilaiCtx();
+  const { baris } = hitungLeger(rombel, mapel);
+  if (!baris.length) { showToast('Belum ada siswa.', false); return; }
+  if (id === 'na') { salinTeks(baris.map(r => bulat(r.na) ?? '').join('\n'), 'Kolom NA disalin.'); return; }
+  if (id === 'deskripsi') { salinTeks(baris.map(r => r.deskripsi).join('\n'), 'Kolom deskripsi disalin.'); return; }
+  const k = nilaiList.find(x => x.id === id);
+  if (!k) return;
+  salinTeks(baris.map(r => num(k.nilai?.[r.s.id]) ?? '').join('\n'), `Kolom "${k.nama}" disalin.`);
+}
+
+async function exportNilai() {
+  const { rombel, mapel } = nilaiCtx();
+  if (!rombel || !mapel) { showToast('Pilih rombel dan mapel terlebih dahulu.', false); return; }
+  showLoading('Menyiapkan ekspor...');
+  try {
+    const XLSX = await ensureXLSX();
+    const { kolom, grup, baris } = hitungLeger(rombel, mapel);
+    if (!kolom.length) { hideLoading(); showToast('Belum ada penilaian untuk diekspor.', false); return; }
+    const wb = XLSX.utils.book_new();
+    const identitas = (r, i) => ({ No: i + 1, NISN: r.s.nisn || '', Nama: r.s.nama });
+    for (const j of NILAI_JENIS) {
+      const list = grup[j.key] || [];
+      if (!list.length) continue;
+      // Nama kolom harus unik agar tidak saling menimpa di sheet.
+      const dipakai = new Set();
+      const judul = list.map(k => {
+        let l = k.nama, n = 2;
+        while (dipakai.has(l)) l = `${k.nama} (${n++})`;
+        dipakai.add(l);
+        return l;
+      });
+      const rows = baris.map((r, i) => {
+        const o = identitas(r, i);
+        list.forEach((k, c) => { o[judul[c]] = num(k.nilai?.[r.s.id]) ?? ''; });
+        return o;
+      });
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), j.sheet);
+    }
+    const leger = baris.map((r, i) => ({
+      ...identitas(r, i),
+      'Rata Formatif': bulat(r.rf) ?? '',
+      'Rata Sumatif LM': bulat(r.rs) ?? '',
+      'SAS': r.sas ?? '',
+      'Nilai Akhir': bulat(r.na) ?? '',
+      'Predikat': r.predikat?.label || '',
+      'Deskripsi': r.deskripsi,
+    }));
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(leger), 'Leger');
+    xlsxDownload(wb, `nilai_${rombel}_${mapel.replace(/\W+/g, '')}_${sekolah.semester}.xlsx`);
+    showToast('Nilai diekspor.');
+  } catch (e) { console.error(e); showToast('Gagal ekspor.', false); }
+  hideLoading();
+}
+
 function renderGRekap() { renderRekapPage('page-g-rekap', true); }
 
 // Halaman Akun guru: profil/data diri saja. Password TIDAK bisa diganti
@@ -1210,6 +1657,22 @@ function renderASet() {
   const curKota = document.getElementById('set-kota')?.value;
   const curKepala = document.getElementById('set-kepala')?.value;
   const curNipKepala = document.getElementById('set-nip-kepala')?.value;
+  const curKktp = document.getElementById('set-kktp')?.value;
+  const curUrut = document.getElementById('set-urut')?.value;
+  const curBf = document.getElementById('set-bobot-f')?.value;
+  const curBs = document.getElementById('set-bobot-s')?.value;
+  const curBsas = document.getElementById('set-bobot-sas')?.value;
+  // KKTP per mapel: pertahankan isian yang sedang diedit; kalau halaman baru
+  // dibuka, ambil dari data tersimpan. Mapel yang baru ditambah tampil kosong.
+  const curKktpMapel = {};
+  let sedangEdit = false;
+  document.querySelectorAll('#page-a-set .kktp-mapel').forEach(el => {
+    sedangEdit = true;
+    curKktpMapel[el.dataset.mapel] = el.value;
+  });
+  const kktpDefault = curKktp ?? sekolah.kktpMin ?? 70;
+  const nilaiKktpMapel = m =>
+    sedangEdit ? (curKktpMapel[m] ?? '') : (sekolah.kktpMapel?.[m] ?? '');
   const el = document.getElementById('page-a-set');
   el.innerHTML = `
     <div class="card card-sage">
@@ -1229,6 +1692,42 @@ function renderASet() {
         <div class="input-wrap"><label>NIP Kepala Madrasah <span class="opt">(opsional)</span></label><input id="set-nip-kepala" class="input" value="${esc(curNipKepala ?? sekolah.nipKepala ?? '')}" placeholder="NIP / NUPTK"/></div>
       </div>
       <div class="input-wrap"><label>Nama Kepala Madrasah <span class="opt">(opsional)</span></label><input id="set-kepala" class="input" value="${esc(curKepala ?? sekolah.kepala ?? '')}" placeholder="Nama beserta gelar"/></div>
+    </div>
+    <div class="card">
+      <div class="section-title">${ico('star',15)} Penilaian</div>
+      <div class="hint" style="margin-bottom:10px">
+        Dipakai pada menu Nilai milik guru; hanya admin yang dapat mengubahnya.
+        Samakan bobot dengan menu <b>Bobot</b> di RDM,
+        dan urutan siswa dengan urutan pada template Excel RDM agar nilai bisa disalin per kolom.
+        Tersimpan bersama tombol Simpan Identitas Sekolah di bawah.
+      </div>
+      <div class="grid2">
+        <div class="input-wrap"><label>Batas Tuntas KKTP <span class="opt">(default)</span></label>
+          <input id="set-kktp" class="input" type="number" min="0" max="100" value="${esc(kktpDefault)}"
+            oninput="setKktpPlaceholder(this.value)"/></div>
+        <div class="input-wrap"><label>Urutan Siswa</label>
+          <select id="set-urut" class="input">
+            ${URUT_SISWA.map(u => `<option value="${u.key}" ${(curUrut ?? sekolah.urutSiswa) === u.key ? 'selected' : ''}>${esc(u.label)}</option>`).join('')}
+          </select></div>
+      </div>
+      <div class="input-wrap" style="margin-bottom:2px"><label>KKTP per Mata Pelajaran</label></div>
+      <div class="hint" style="margin-bottom:8px">Kosongkan bila mapel tersebut mengikuti batas tuntas default di atas.</div>
+      <div class="grid2">
+        ${aSetState.mapel.map(m => `
+        <div class="input-wrap"><label class="opt">${esc(m)}</label>
+          <input class="input kktp-mapel" data-mapel="${esc(m)}" type="number" min="0" max="100"
+            placeholder="${esc(kktpDefault)}" value="${esc(nilaiKktpMapel(m))}"/></div>`).join('')
+          || '<span class="hint">Belum ada mapel.</span>'}
+      </div>
+      <div class="input-wrap" style="margin-bottom:4px"><label>Bobot Nilai Akhir (%)</label></div>
+      <div class="grid3">
+        <div class="input-wrap"><label class="opt">Formatif</label>
+          <input id="set-bobot-f" class="input" type="number" min="0" max="100" value="${esc(curBf ?? bobotNilai().formatif)}"/></div>
+        <div class="input-wrap"><label class="opt">Sumatif LM</label>
+          <input id="set-bobot-s" class="input" type="number" min="0" max="100" value="${esc(curBs ?? bobotNilai().sumatif)}"/></div>
+        <div class="input-wrap"><label class="opt">SAS</label>
+          <input id="set-bobot-sas" class="input" type="number" min="0" max="100" value="${esc(curBsas ?? bobotNilai().sas)}"/></div>
+      </div>
     </div>
     <div class="card">
       <div class="section-title">${ico('tag',15)} Daftar Rombel</div>
@@ -1261,6 +1760,14 @@ function renderASet() {
       <button class="btn btn-teal" style="width:100%" onclick="simpanAdmin()">Simpan Akun Admin</button>
     </div>`;
   getAdminDoc().then(adm => { document.getElementById('adm-user').value = adm?.username || 'admin'; }).catch(() => {});
+}
+
+// Placeholder KKTP tiap mapel mengikuti angka default yang sedang diketik,
+// agar admin melihat batas yang benar-benar berlaku bagi mapel kosong.
+function setKktpPlaceholder(val) {
+  const v = num(val);
+  const teks = v === null ? '' : String(Math.min(100, Math.max(0, Math.round(v))));
+  document.querySelectorAll('#page-a-set .kktp-mapel').forEach(el => { el.placeholder = teks; });
 }
 
 async function setAddItem(kind) {
@@ -1296,7 +1803,13 @@ function setDelItem(kind, v) {
 async function persistDaftar(kind, list, okMsg) {
   showLoading('Menyimpan...');
   try {
-    await saveSekolahDoc({ [kind]: list });
+    const patch = { [kind]: list };
+    // Buang KKTP milik mapel yang sudah dihapus, agar tidak menumpuk.
+    if (kind === 'mapel' && sekolah.kktpMapel) {
+      patch.kktpMapel = Object.fromEntries(
+        Object.entries(sekolah.kktpMapel).filter(([m]) => list.includes(m)));
+    }
+    await saveSekolahDoc(patch);
     showToast(okMsg);
   } catch (e) {
     console.error(e);
@@ -1310,6 +1823,17 @@ async function simpanSekolah() {
   const nama = document.getElementById('set-nama').value.trim();
   const tp = document.getElementById('set-tp').value.trim();
   if (!nama || !tp) { showToast('Nama sekolah & tahun pelajaran wajib diisi.', false); return; }
+  const jepit = id => Math.min(100, Math.max(0, num(document.getElementById(id).value) ?? 0));
+  const bobot = { formatif: jepit('set-bobot-f'), sumatif: jepit('set-bobot-s'), sas: jepit('set-bobot-sas') };
+  if (bobot.formatif + bobot.sumatif + bobot.sas === 0) {
+    showToast('Total bobot nilai akhir tidak boleh 0.', false); return;
+  }
+  // Hanya mapel yang benar-benar diisi yang disimpan; sisanya ikut default.
+  const kktpMapel = {};
+  document.querySelectorAll('#page-a-set .kktp-mapel').forEach(el => {
+    const v = num(el.value);
+    if (v !== null) kktpMapel[el.dataset.mapel] = Math.min(100, Math.max(0, Math.round(v)));
+  });
   showLoading('Menyimpan...');
   try {
     await saveSekolahDoc({
@@ -1318,6 +1842,10 @@ async function simpanSekolah() {
       kota: document.getElementById('set-kota').value.trim(),
       kepala: document.getElementById('set-kepala').value.trim(),
       nipKepala: document.getElementById('set-nip-kepala').value.trim(),
+      kktpMin: jepit('set-kktp'),
+      kktpMapel,
+      urutSiswa: document.getElementById('set-urut').value,
+      bobot,
     });
     document.getElementById('a-header-sub').textContent =
       `${sekolah.nama} · TP ${sekolah.tahunPelajaran} · ${sekolah.semester}`;
@@ -1523,7 +2051,9 @@ Object.assign(window, {
   aJurnalTgl, aJurnalGuru, exportJurnalBulan,
   exportPdfRiwayat, exportPdfJurnalGuru,
   rekapSet, exportRekap,
-  setAddItem, setDelItem, simpanSekolah, simpanAdmin,
+  nilaiFilter, bukaNilai, setNilaiInput, normalNilai, tutupNilaiInput,
+  simpanNilaiKolom, hapusNilai, salinKolom, exportNilai,
+  setAddItem, setDelItem, simpanSekolah, simpanAdmin, setKktpPlaceholder,
   kelolaRombel, renameRombel, migrasiSiswa, masukkanSiswa,
   mrToggle, mrAddToggle, mrPilihSemua, mrSetSumber,
   closeModal, openModal,
