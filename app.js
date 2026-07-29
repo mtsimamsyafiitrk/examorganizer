@@ -548,6 +548,12 @@ function kolomNilai(rombel, mapel) {
     .sort((a, b) => (a.urut || 0) - (b.urut || 0) || String(a.nama).localeCompare(String(b.nama), 'id'));
 }
 
+// Batas tuntas KKTP berlaku per mapel — Matematika dan Akidah Akhlak wajar
+// berbeda. Mapel yang tidak diatur khusus mengikuti default madrasah.
+function kktpUntuk(mapel) {
+  return num(sekolah.kktpMapel?.[mapel]) ?? num(sekolah.kktpMin) ?? 70;
+}
+
 function bobotNilai() {
   const b = { ...DEFAULT_SEKOLAH.bobot, ...(sekolah.bobot || {}) };
   return { formatif: num(b.formatif) ?? 0, sumatif: num(b.sumatif) ?? 0, sas: num(b.sas) ?? 0 };
@@ -568,7 +574,7 @@ function hitungLeger(rombel, mapel) {
   const grup = { formatif: [], sumatif: [], sas: [] };
   for (const k of kolom) if (grup[k.jenis]) grup[k.jenis].push(k);
   const siswa = urutkanSiswa(siswaByRombel(rombel), sekolah.urutSiswa);
-  const kktpMin = num(sekolah.kktpMin) ?? 70;
+  const kktpMin = kktpUntuk(mapel);
   const baris = siswa.map(s => {
     const val = k => num(k.nilai?.[s.id]);
     const rf = rata(grup.formatif.map(val));
@@ -692,7 +698,8 @@ function blokLeger(rombel, mapel) {
         <button class="btn-ghost" onclick="exportNilai()">${ico('download', 13)} Ekspor Excel</button>
       </div>
       <div class="hint" style="margin-bottom:8px">
-        NA = ${b.formatif}% Formatif + ${b.sumatif}% Sumatif LM + ${b.sas}% SAS · batas tuntas KKTP <b>${kktpMin}</b>.
+        NA = ${b.formatif}% Formatif + ${b.sumatif}% Sumatif LM + ${b.sas}% SAS ·
+        batas tuntas KKTP ${esc(mapel)}: <b>${kktpMin}</b>.
         Bobot &amp; KKTP diatur admin di menu Setelan — samakan dengan menu <b>Bobot</b> di RDM.
         Komponen yang belum dinilai tidak ikut dihitung.
       </div>
@@ -1655,6 +1662,17 @@ function renderASet() {
   const curBf = document.getElementById('set-bobot-f')?.value;
   const curBs = document.getElementById('set-bobot-s')?.value;
   const curBsas = document.getElementById('set-bobot-sas')?.value;
+  // KKTP per mapel: pertahankan isian yang sedang diedit; kalau halaman baru
+  // dibuka, ambil dari data tersimpan. Mapel yang baru ditambah tampil kosong.
+  const curKktpMapel = {};
+  let sedangEdit = false;
+  document.querySelectorAll('#page-a-set .kktp-mapel').forEach(el => {
+    sedangEdit = true;
+    curKktpMapel[el.dataset.mapel] = el.value;
+  });
+  const kktpDefault = curKktp ?? sekolah.kktpMin ?? 70;
+  const nilaiKktpMapel = m =>
+    sedangEdit ? (curKktpMapel[m] ?? '') : (sekolah.kktpMapel?.[m] ?? '');
   const el = document.getElementById('page-a-set');
   el.innerHTML = `
     <div class="card card-sage">
@@ -1678,17 +1696,28 @@ function renderASet() {
     <div class="card">
       <div class="section-title">${ico('star',15)} Penilaian</div>
       <div class="hint" style="margin-bottom:10px">
-        Dipakai pada menu Nilai milik guru. Samakan bobot dengan menu <b>Bobot</b> di RDM,
+        Dipakai pada menu Nilai milik guru; hanya admin yang dapat mengubahnya.
+        Samakan bobot dengan menu <b>Bobot</b> di RDM,
         dan urutan siswa dengan urutan pada template Excel RDM agar nilai bisa disalin per kolom.
         Tersimpan bersama tombol Simpan Identitas Sekolah di bawah.
       </div>
       <div class="grid2">
-        <div class="input-wrap"><label>Batas Tuntas KKTP</label>
-          <input id="set-kktp" class="input" type="number" min="0" max="100" value="${esc(curKktp ?? sekolah.kktpMin ?? 70)}"/></div>
+        <div class="input-wrap"><label>Batas Tuntas KKTP <span class="opt">(default)</span></label>
+          <input id="set-kktp" class="input" type="number" min="0" max="100" value="${esc(kktpDefault)}"
+            oninput="setKktpPlaceholder(this.value)"/></div>
         <div class="input-wrap"><label>Urutan Siswa</label>
           <select id="set-urut" class="input">
             ${URUT_SISWA.map(u => `<option value="${u.key}" ${(curUrut ?? sekolah.urutSiswa) === u.key ? 'selected' : ''}>${esc(u.label)}</option>`).join('')}
           </select></div>
+      </div>
+      <div class="input-wrap" style="margin-bottom:2px"><label>KKTP per Mata Pelajaran</label></div>
+      <div class="hint" style="margin-bottom:8px">Kosongkan bila mapel tersebut mengikuti batas tuntas default di atas.</div>
+      <div class="grid2">
+        ${aSetState.mapel.map(m => `
+        <div class="input-wrap"><label class="opt">${esc(m)}</label>
+          <input class="input kktp-mapel" data-mapel="${esc(m)}" type="number" min="0" max="100"
+            placeholder="${esc(kktpDefault)}" value="${esc(nilaiKktpMapel(m))}"/></div>`).join('')
+          || '<span class="hint">Belum ada mapel.</span>'}
       </div>
       <div class="input-wrap" style="margin-bottom:4px"><label>Bobot Nilai Akhir (%)</label></div>
       <div class="grid3">
@@ -1733,6 +1762,14 @@ function renderASet() {
   getAdminDoc().then(adm => { document.getElementById('adm-user').value = adm?.username || 'admin'; }).catch(() => {});
 }
 
+// Placeholder KKTP tiap mapel mengikuti angka default yang sedang diketik,
+// agar admin melihat batas yang benar-benar berlaku bagi mapel kosong.
+function setKktpPlaceholder(val) {
+  const v = num(val);
+  const teks = v === null ? '' : String(Math.min(100, Math.max(0, Math.round(v))));
+  document.querySelectorAll('#page-a-set .kktp-mapel').forEach(el => { el.placeholder = teks; });
+}
+
 async function setAddItem(kind) {
   const inp = document.getElementById('set-add-' + kind);
   let v = inp.value.trim();
@@ -1766,7 +1803,13 @@ function setDelItem(kind, v) {
 async function persistDaftar(kind, list, okMsg) {
   showLoading('Menyimpan...');
   try {
-    await saveSekolahDoc({ [kind]: list });
+    const patch = { [kind]: list };
+    // Buang KKTP milik mapel yang sudah dihapus, agar tidak menumpuk.
+    if (kind === 'mapel' && sekolah.kktpMapel) {
+      patch.kktpMapel = Object.fromEntries(
+        Object.entries(sekolah.kktpMapel).filter(([m]) => list.includes(m)));
+    }
+    await saveSekolahDoc(patch);
     showToast(okMsg);
   } catch (e) {
     console.error(e);
@@ -1785,6 +1828,12 @@ async function simpanSekolah() {
   if (bobot.formatif + bobot.sumatif + bobot.sas === 0) {
     showToast('Total bobot nilai akhir tidak boleh 0.', false); return;
   }
+  // Hanya mapel yang benar-benar diisi yang disimpan; sisanya ikut default.
+  const kktpMapel = {};
+  document.querySelectorAll('#page-a-set .kktp-mapel').forEach(el => {
+    const v = num(el.value);
+    if (v !== null) kktpMapel[el.dataset.mapel] = Math.min(100, Math.max(0, Math.round(v)));
+  });
   showLoading('Menyimpan...');
   try {
     await saveSekolahDoc({
@@ -1794,6 +1843,7 @@ async function simpanSekolah() {
       kepala: document.getElementById('set-kepala').value.trim(),
       nipKepala: document.getElementById('set-nip-kepala').value.trim(),
       kktpMin: jepit('set-kktp'),
+      kktpMapel,
       urutSiswa: document.getElementById('set-urut').value,
       bobot,
     });
@@ -2003,7 +2053,7 @@ Object.assign(window, {
   rekapSet, exportRekap,
   nilaiFilter, bukaNilai, setNilaiInput, normalNilai, tutupNilaiInput,
   simpanNilaiKolom, hapusNilai, salinKolom, exportNilai,
-  setAddItem, setDelItem, simpanSekolah, simpanAdmin,
+  setAddItem, setDelItem, simpanSekolah, simpanAdmin, setKktpPlaceholder,
   kelolaRombel, renameRombel, migrasiSiswa, masukkanSiswa,
   mrToggle, mrAddToggle, mrPilihSemua, mrSetSumber,
   closeModal, openModal,

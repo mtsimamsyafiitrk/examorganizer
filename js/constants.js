@@ -53,8 +53,10 @@ export const NILAI_JENIS = [
 
 export const NILAI_JENIS_MAP = Object.fromEntries(NILAI_JENIS.map(j => [j.key, j]));
 
-// Predikat KKTP, urut dari terendah. Batas tuntas (kktpMin) diatur admin;
-// rentang di atasnya dibagi tiga sama panjang — lihat kktpDari() di utils.js.
+// Predikat KKTP, urut dari terendah. Batas tuntas diatur admin per mapel
+// (kktpMapel), dengan kktpMin sebagai default madrasah untuk mapel yang tidak
+// diatur khusus. Rentang di atas batas tuntas dibagi tiga sama panjang —
+// lihat kktpDari() di utils.js.
 export const KKTP_PREDIKAT = [
   { kode: "D", label: "Perlu Bimbingan", color: "#a86870" },
   { kode: "C", label: "Cukup",           color: "#a8874d" },
@@ -88,9 +90,11 @@ export const DEFAULT_SEKOLAH = {
   kota: "Tarakan",
   kepala: "",
   nipKepala: "",
-  // Penilaian: batas tuntas KKTP, bobot nilai akhir (samakan dengan menu
-  // Bobot di RDM), dan urutan siswa pada ekspor.
+  // Penilaian: batas tuntas KKTP (default madrasah + penyetelan per mapel),
+  // bobot nilai akhir (samakan dengan menu Bobot di RDM), dan urutan siswa
+  // pada ekspor.
   kktpMin: 70,
+  kktpMapel: {},
   bobot: { formatif: 0, sumatif: 60, sas: 40 },
   urutSiswa: "nama",
   rombel: ["7A", "7B", "8A", "8B", "9A", "9B"],
