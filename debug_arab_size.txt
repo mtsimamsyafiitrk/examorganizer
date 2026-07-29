@@ -1,9 +1,0 @@
-base_size=11, expected_arab_size=16
-OUTPUT: Penulisan kata "Madrosatun" <font name="AppArabic" size="16">(ﺔﺳﺭﺪﻣ)</font> adalah...
-
-base_size=10, expected_arab_size=15
-OUTPUT: A. <font name="AppArabic" size="15">ﺔﺳﺭﺪﻣ</font>
-
-base_size=16, expected_arab_size=24
-OUTPUT: Header <font name="AppArabic" size="24">ﺐﺘﻛ</font>
-
