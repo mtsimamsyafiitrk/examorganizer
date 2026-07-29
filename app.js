@@ -499,43 +499,89 @@ function hapusJurnal(id) {
 // ═══════════════════ GURU: REKAP & AKUN ═══════════════════
 function renderGRekap() { renderRekapPage('page-g-rekap', true); }
 
+// Halaman Akun guru: profil/data diri saja. Password TIDAK bisa diganti
+// dari sini — pengelolaan password hanya lewat akun admin.
+const PENDIDIKAN_LIST = ['SMA/MA/SMK', 'D3', 'S1', 'S2', 'S3'];
+const STATUS_PEG_LIST = ['GTY (Guru Tetap Yayasan)', 'GTT / Honorer', 'PNS', 'PPPK', 'Lainnya'];
+
 function renderGAkun() {
+  const u = currentUser;
+  const inp = (id, label, val, extra = '') =>
+    `<div class="input-wrap"><label>${label}</label><input id="${id}" class="input" value="${esc(val || '')}" ${extra}/></div>`;
+  const sel = (id, label, list, val) =>
+    `<div class="input-wrap"><label>${label}</label><select id="${id}" class="input">
+      <option value="">— pilih —</option>
+      ${list.map(x => `<option ${x === val ? 'selected' : ''}>${esc(x)}</option>`).join('')}
+    </select></div>`;
   const el = document.getElementById('page-g-akun');
   el.innerHTML = `
     <div class="card card-sage">
       <div class="section-title">${ico('user',15)} Akun Saya</div>
       <div class="hint" style="font-size:13px;line-height:1.7">
-        <b>${esc(currentUser.nama)}</b><br>
-        Username: <b>${esc(currentUser.username)}</b><br>
-        ${currentUser.nip ? 'NIP: <b>' + esc(currentUser.nip) + '</b><br>' : ''}
-        Mapel: ${esc((currentUser.mapel || []).join(', ') || '-')}
+        <b>${esc(u.nama)}</b><br>
+        Username: <b>${esc(u.username)}</b><br>
+        Mapel: ${esc((u.mapel || []).join(', ') || '-')}
+      </div>
+      <div class="hint" style="margin-top:8px">Nama, username, mapel, dan password dikelola oleh admin. Hubungi admin bila perlu perubahan.</div>
+    </div>
+    <div class="card">
+      <div class="section-title">${ico('user',15)} Data Diri</div>
+      ${inp('pf-nip', 'NIP / NUPTK', u.nip)}
+      <div class="grid2">
+        ${inp('pf-tempat-lahir', 'Tempat Lahir', u.tempatLahir)}
+        ${inp('pf-tgl-lahir', 'Tanggal Lahir', u.tglLahir, 'type="date"')}
+      </div>
+      <div class="input-wrap"><label>Jenis Kelamin</label><select id="pf-jk" class="input">
+        <option value="">— pilih —</option>
+        <option ${u.jk === 'Laki-laki' ? 'selected' : ''}>Laki-laki</option>
+        <option ${u.jk === 'Perempuan' ? 'selected' : ''}>Perempuan</option>
+      </select></div>
+      <div class="input-wrap"><label>Alamat</label><textarea id="pf-alamat" class="input" rows="2">${esc(u.alamat || '')}</textarea></div>
+      <div class="grid2">
+        ${inp('pf-hp', 'No. HP / WA', u.hp, 'inputmode="tel"')}
+        ${inp('pf-email', 'Email', u.email, 'type="email"')}
       </div>
     </div>
     <div class="card">
-      <div class="section-title">${ico('key',15)} Ganti Password</div>
-      <div class="input-wrap"><label>Password Lama</label><input id="pw-old" class="input" type="password"/><button class="eye" onclick="togglePw('pw-old',this)">${ico('eye',16)}</button></div>
-      <div class="input-wrap"><label>Password Baru</label><input id="pw-new" class="input" type="password"/><button class="eye" onclick="togglePw('pw-new',this)">${ico('eye',16)}</button></div>
-      <div class="input-wrap"><label>Ulangi Password Baru</label><input id="pw-new2" class="input" type="password"/><button class="eye" onclick="togglePw('pw-new2',this)">${ico('eye',16)}</button></div>
-      <button class="btn btn-sage" style="width:100%" onclick="gantiPwGuru()">Simpan Password Baru</button>
-    </div>`;
+      <div class="section-title">${ico('grad',15)} Data Pendidikan / Lulusan</div>
+      ${sel('pf-pendidikan', 'Pendidikan Terakhir', PENDIDIKAN_LIST, u.pendidikan)}
+      ${inp('pf-jurusan', 'Program Studi / Jurusan', u.jurusan)}
+      ${inp('pf-kampus', 'Perguruan Tinggi / Almamater', u.kampus)}
+      ${inp('pf-tahun-lulus', 'Tahun Lulus', u.tahunLulus, 'inputmode="numeric" placeholder="cth: 2018"')}
+    </div>
+    <div class="card">
+      <div class="section-title">${ico('clipboard',15)} Data Kepegawaian</div>
+      ${sel('pf-status-peg', 'Status Kepegawaian', STATUS_PEG_LIST, u.statusPeg)}
+      ${inp('pf-tmt', 'TMT Mulai Mengajar', u.tmt, 'type="date"')}
+    </div>
+    <button class="btn btn-sage" style="width:100%;padding:13px" onclick="simpanProfilGuru()">${ico('save',14)} Simpan Data Guru</button>`;
 }
 
-async function gantiPwGuru() {
-  const oldPw = document.getElementById('pw-old').value;
-  const newPw = document.getElementById('pw-new').value;
-  const newPw2 = document.getElementById('pw-new2').value;
-  if (!oldPw || !newPw) { showToast('Semua kolom wajib diisi.', false); return; }
-  if (newPw.length < 6) { showToast('Password baru minimal 6 karakter.', false); return; }
-  if (newPw !== newPw2) { showToast('Konfirmasi password tidak cocok.', false); return; }
+async function simpanProfilGuru() {
+  const v = id => document.getElementById(id).value.trim();
+  const tahunLulus = v('pf-tahun-lulus');
+  if (tahunLulus && !/^\d{4}$/.test(tahunLulus)) { showToast('Tahun lulus harus 4 angka, cth: 2018.', false); return; }
+  const profil = {
+    nip: v('pf-nip'),
+    tempatLahir: v('pf-tempat-lahir'),
+    tglLahir: v('pf-tgl-lahir'),
+    jk: v('pf-jk'),
+    alamat: v('pf-alamat'),
+    hp: v('pf-hp'),
+    email: v('pf-email'),
+    pendidikan: v('pf-pendidikan'),
+    jurusan: v('pf-jurusan'),
+    kampus: v('pf-kampus'),
+    tahunLulus,
+    statusPeg: v('pf-status-peg'),
+    tmt: v('pf-tmt'),
+  };
   showLoading('Menyimpan...');
   try {
-    if (await hashPw(oldPw) !== currentUser.pwHash) { hideLoading(); showToast('Password lama salah.', false); return; }
-    const pwHash = await hashPw(newPw);
-    await setDoc(doc(fs, 'jm_guru', currentUser.id), { ...stripId(currentUser), pwHash });
-    currentUser.pwHash = pwHash;
-    showToast('Password berhasil diganti!');
-    renderGAkun();
-  } catch (e) { showToast('Gagal menyimpan.', false); }
+    await setDoc(doc(fs, 'jm_guru', currentUser.id), { ...stripId(currentUser), ...profil });
+    Object.assign(currentUser, profil);
+    showToast('Data guru berhasil disimpan.');
+  } catch (e) { console.error(e); showToast('Gagal menyimpan.', false); }
   hideLoading();
 }
 function stripId(u) { const { id, role, ...rest } = u; return rest; }
@@ -573,7 +619,7 @@ function renderAGuru() {
         <span>${ico('users',15)} Akun Guru <span class="badge-mini">${guruList.length}</span></span>
         <button class="btn btn-sage" onclick="openModalGuru()">${ico('plus',14)} Tambah</button>
       </div>
-      <div class="hint" style="margin-bottom:6px">Password awal akun baru: <b>${GURU_DEFAULT_PW}</b> — minta guru menggantinya di menu Akun.</div>
+      <div class="hint" style="margin-bottom:6px">Password guru hanya dikelola dari sini: atur lewat tombol Edit, atau reset ke <b>${GURU_DEFAULT_PW}</b> dengan tombol kunci.</div>
       ${guruList.length ? guruList.map(g => `
         <div class="item">
           <div class="avatar">${esc((g.nama || '?')[0].toUpperCase())}</div>
@@ -597,8 +643,10 @@ function openModalGuru(id) {
   document.getElementById('mg-user').value = g?.username || '';
   mgMapelState = new Set(g?.mapel || []);
   renderMgMapel();
-  document.getElementById('mg-pw-info').innerHTML = g ? '' :
-    `Akun baru dibuat dengan password awal <b>${GURU_DEFAULT_PW}</b>.`;
+  document.getElementById('mg-pass').value = '';
+  document.getElementById('mg-pw-info').innerHTML = g
+    ? 'Kosongkan kolom password bila tidak ingin mengubahnya. Guru tidak dapat mengganti password sendiri.'
+    : `Bila kolom password dikosongkan, akun baru memakai password awal <b>${GURU_DEFAULT_PW}</b>.`;
   openModal('modal-guru');
 }
 function renderMgMapel() {
@@ -618,15 +666,22 @@ async function simpanGuru() {
   if (!nama || !username) { showToast('Nama dan username wajib diisi.', false); return; }
   if (!/^[a-z0-9._-]{3,}$/.test(username)) { showToast('Username minimal 3 karakter (huruf/angka/titik).', false); return; }
   if (guruList.some(g => g.username === username && g.id !== editGuruId)) { showToast('Username sudah dipakai guru lain.', false); return; }
+  const passBaru = document.getElementById('mg-pass').value;
+  if (passBaru && passBaru.length < 6) { showToast('Password minimal 6 karakter.', false); return; }
   showLoading('Menyimpan...');
   try {
     const id = editGuruId || uid();
     const old = editGuruId ? guruList.find(g => g.id === editGuruId) : null;
-    const pwHash = old ? old.pwHash : await hashPw(GURU_DEFAULT_PW);
-    await setDoc(doc(fs, 'jm_guru', id), { nama, nip, username, pwHash, mapel: [...mgMapelState] });
+    const pwHash = passBaru ? await hashPw(passBaru)
+      : (old ? old.pwHash : await hashPw(GURU_DEFAULT_PW));
+    // Merge dengan data lama agar profil (data diri/pendidikan) yang diisi guru tidak hilang.
+    const { id: _oldId, ...oldData } = old || {};
+    await setDoc(doc(fs, 'jm_guru', id), { ...oldData, nama, nip, username, pwHash, mapel: [...mgMapelState] });
     await loadGuru();
     closeModal('modal-guru');
-    showToast(old ? 'Data guru diperbarui.' : `Akun guru dibuat (password: ${GURU_DEFAULT_PW}).`);
+    showToast(old
+      ? 'Data guru diperbarui.' + (passBaru ? ' Password baru tersimpan.' : '')
+      : `Akun guru dibuat (password: ${passBaru ? 'sesuai isian' : GURU_DEFAULT_PW}).`);
     renderAGuru();
   } catch (e) { console.error(e); showToast('Gagal menyimpan.', false); }
   hideLoading();
@@ -1287,7 +1342,7 @@ if ('serviceWorker' in navigator) {
 Object.assign(window, {
   setLoginRole, doLogin, doLogout, togglePw, gNav, aNav,
   renderAbsenList, setAbsen, setSemuaAbsen, toggleKbc, simpanJurnal, resetJurnalForm,
-  editJurnal, hapusJurnal, lihatJurnal, gRiwayatBulan, gantiPwGuru,
+  editJurnal, hapusJurnal, lihatJurnal, gRiwayatBulan, simpanProfilGuru,
   openModalGuru, toggleMgMapel, simpanGuru, resetPwGuru, hapusGuru,
   aSiswaFilter, openModalSiswa, simpanSiswa, hapusSiswa, hapusSiswaRombel,
   openModalUpload, downloadTemplateSiswa, prosesUploadSiswa,

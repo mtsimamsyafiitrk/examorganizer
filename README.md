@@ -10,10 +10,10 @@ Aplikasi web (PWA) jurnal mengajar guru untuk madrasah — **Kurikulum Merdeka K
 - **Absensi siswa** langsung di dalam jurnal: pilih rombel → daftar siswa muncul otomatis → tandai Hadir/Sakit/Izin/Alpa (default Hadir).
 - **Riwayat jurnal** per bulan, bisa diedit/dihapus.
 - **Rekap absensi** per rombel per bulan (khusus kelas yang diajar sendiri) + ekspor Excel.
-- Ganti password sendiri.
+- Pengaturan data guru: data diri, data pendidikan/lulusan, dan kepegawaian (password dikelola admin).
 
 ### 🛡️ Admin
-- **Kelola akun guru**: tambah/edit/hapus akun, atur mapel yang diampu, reset password.
+- **Kelola akun guru**: tambah/edit/hapus akun, atur mapel yang diampu, atur/reset password guru (guru tidak dapat mengganti password sendiri).
 - **Kelola data siswa** sederhana (Nama, Rombel, NISN): tambah manual atau **upload Excel** (template disediakan), hapus per siswa atau per rombel.
 - **Monitor jurnal** semua guru per tanggal + ekspor jurnal sebulan ke Excel.
 - **Rekap absensi** seluruh rombel + ekspor Excel.
@@ -40,7 +40,7 @@ Aplikasi web (PWA) jurnal mengajar guru untuk madrasah — **Kurikulum Merdeka K
 1. Buka aplikasi, pilih tab **Admin**, login dengan username `admin` dan password default `Madras0h!`.
 2. Segera ganti username/password admin di menu **Setelan**.
 3. Atur identitas madrasah, tahun pelajaran, daftar rombel, dan daftar mapel.
-4. Tambahkan **akun guru** (password awal: `guru123` — minta guru menggantinya).
+4. Tambahkan **akun guru** (password awal: `guru123`, bisa diatur sendiri oleh admin saat menambah/mengedit guru).
 5. Upload **data siswa** dari Excel (kolom: Nama, Rombel, NISN) atau input manual.
 6. Guru login dan mulai mengisi jurnal mengajar + absensi.
 
