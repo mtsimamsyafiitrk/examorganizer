@@ -580,7 +580,9 @@ function hitungLeger(rombel, mapel) {
     const sumber = grup.sumatif.length ? grup.sumatif : grup.formatif;
     return {
       s, rf, rs, sas, na,
-      predikat: kktpDari(na, kktpMin),
+      // Predikat mengikuti NA yang dibulatkan — angka itulah yang dilaporkan
+      // ke RDM, sehingga angka dan predikat yang dilihat guru selalu sejalan.
+      predikat: kktpDari(bulat(na), kktpMin),
       deskripsi: deskripsiCapaian(sumber.map(k => ({ nama: k.nama, nilai: val(k) })), kktpMin),
     };
   });
