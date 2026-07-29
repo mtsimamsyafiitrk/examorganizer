@@ -1,0 +1,85 @@
+/* ── PORTAL APLIKASI ──
+   Halaman induk (launcher) yang menampilkan ikon aplikasi.
+   Palet & tipografi mengikuti aplikasi Jurnal Mengajar / Daftar Hadir. */
+
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f0f4f8; --bg2:#e8edf2; --card:#ffffff;
+  --border:#dde3ea; --border2:#c8d0da;
+  --text:#2d3748; --text2:#4a5568; --muted:#8a97a8;
+  --sage:#7fb3a0; --sage2:#5a9b86; --sage3:#e8f4f0; --sage4:#d0ebe4;
+  --teal:#6ba8b8; --teal2:#4d8fa0; --teal3:#e5f2f6; --teal4:#c2dde5;
+  --shadow:0 2px 12px rgba(45,55,72,0.08);
+  --shadow2:0 4px 24px rgba(45,55,72,0.12);
+}
+body{font-family:'Nunito',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;
+  background-image:radial-gradient(ellipse 60% 40% at 20% 10%,rgba(127,179,160,0.12),transparent),
+  radial-gradient(ellipse 50% 40% at 80% 90%,rgba(107,168,184,0.1),transparent);}
+button{cursor:pointer;font-family:inherit}
+
+/* ── LAYOUT ── */
+.portal-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;
+  padding:28px 18px calc(28px + env(safe-area-inset-bottom))}
+.portal-inner{width:100%;max-width:560px}
+
+/* ── HEADER ── */
+.portal-head{text-align:center;margin-bottom:24px}
+.portal-logo{width:84px;height:84px;border-radius:24px;object-fit:contain;
+  box-shadow:var(--shadow2);background:#fff}
+.portal-title{font-family:'Amiri',serif;font-size:27px;font-weight:700;color:var(--text);
+  line-height:1.25;margin-top:14px}
+.portal-sub{font-size:13px;color:var(--sage2);font-weight:700;margin-top:4px}
+
+/* ── GRID IKON APLIKASI ── */
+/* Selalu dua kolom (seperti ikon di layar utama HP); melebar sendiri di layar besar. */
+.app-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px}
+
+.app-tile{display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;
+  background:var(--card);border:1px solid var(--border);border-radius:22px;
+  padding:24px 14px 20px;box-shadow:var(--shadow);text-decoration:none;color:inherit;
+  transition:transform .2s,box-shadow .2s,border-color .2s}
+.app-tile:hover{transform:translateY(-3px);box-shadow:var(--shadow2)}
+.app-tile:active{transform:translateY(0)}
+.app-tile:focus-visible{outline:3px solid var(--sage);outline-offset:3px}
+
+.app-ico{width:80px;height:80px;border-radius:24px;display:flex;align-items:center;justify-content:center;
+  color:#fff;flex-shrink:0}
+.app-nama{font-size:15.5px;font-weight:800;line-height:1.3}
+.app-desc{font-size:12px;color:var(--muted);font-weight:600;line-height:1.5}
+/* margin-top:auto → tautan "Buka" sejajar di dasar kartu meski deskripsi beda panjang. */
+.app-buka{margin-top:auto;padding-top:4px;font-size:11.5px;font-weight:800;letter-spacing:.3px;
+  display:inline-flex;align-items:center;gap:4px}
+
+/* Warna per aplikasi — dibedakan lewat atribut data-tone di app.js. */
+.app-tile[data-tone="sage"] .app-ico{background:linear-gradient(135deg,#7fb3a0,#5a9b86);
+  box-shadow:0 6px 18px rgba(90,155,134,0.32)}
+.app-tile[data-tone="sage"] .app-buka{color:var(--sage2)}
+.app-tile[data-tone="sage"]:hover{border-color:var(--sage4)}
+
+.app-tile[data-tone="teal"] .app-ico{background:linear-gradient(135deg,#6ba8b8,#4d8fa0);
+  box-shadow:0 6px 18px rgba(77,143,160,0.32)}
+.app-tile[data-tone="teal"] .app-buka{color:var(--teal2)}
+.app-tile[data-tone="teal"]:hover{border-color:var(--teal4)}
+
+/* ── TOMBOL PASANG (PWA) ── */
+.btn-install{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-top:16px;
+  background:var(--card);border:1px solid var(--border2);border-radius:14px;padding:12px;
+  font-size:13px;font-weight:800;color:var(--text2);transition:background .2s}
+.btn-install:hover{background:var(--bg2)}
+.btn-install-ico{display:inline-flex;color:var(--sage2)}
+
+/* ── FOOTER ── */
+.portal-foot{text-align:center;font-size:12px;color:var(--muted);font-weight:600;margin-top:20px}
+
+/* ── LAYAR SEMPIT ── kecilkan elemen agar dua kolom tetap lega di HP kecil. */
+@media(max-width:430px){
+  .portal-wrap{padding:22px 14px calc(22px + env(safe-area-inset-bottom))}
+  .portal-logo{width:70px;height:70px;border-radius:20px}
+  .portal-title{font-size:23px}
+  .app-grid{gap:11px}
+  .app-tile{padding:20px 11px 16px;gap:8px;border-radius:20px}
+  .app-ico{width:64px;height:64px;border-radius:20px}
+  .app-ico svg{width:34px;height:34px}
+  .app-nama{font-size:14px}
+  .app-desc{font-size:11.5px}
+}

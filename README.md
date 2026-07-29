@@ -20,6 +20,20 @@ Aplikasi web (PWA) jurnal mengajar guru untuk madrasah — **Kurikulum Merdeka K
 - **Rekap absensi** seluruh rombel + ekspor Excel.
 - **Pengaturan**: identitas madrasah, tahun pelajaran/semester, kota & nama/NIP kepala madrasah (dipakai pada kop dan kolom tanda tangan PDF), daftar rombel, daftar mapel, akun admin.
 
+## Portal Aplikasi (Halaman Induk)
+
+Folder [`portal/`](portal/) berisi **halaman induk** yang menampilkan ikon seluruh aplikasi guru —
+klik salah satu ikon, aplikasi tersebut terbuka:
+
+- **Jurnal Mengajar** (repositori ini)
+- **Daftar Hadir Guru** (https://mtsimamsyafiitrk.github.io/DaftarHadirGuru/)
+
+Alamat: **https://mtsimamsyafiitrk.github.io/JurnalGuru/portal/** — bisa dipasang sendiri ke layar
+utama sebagai satu aplikasi induk (PWA terpisah dengan service worker ber-scope `portal/` saja,
+sehingga tidak mengganggu aplikasi Jurnal Mengajar di root).
+
+Daftar aplikasi diatur pada konstanta `APPS` di `portal/app.js`. Detail lihat [`portal/README.md`](portal/README.md).
+
 ## Teknologi
 - HTML/CSS/JavaScript murni (tanpa build step) — bisa dihosting di GitHub Pages.
 - **Firebase Firestore** sebagai basis data (koleksi berawalan `jm_`).

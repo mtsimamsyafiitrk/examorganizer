@@ -1,0 +1,33 @@
+{
+  "name": "Portal Aplikasi Guru — Al Imam Asy-Syafi'i Tarakan",
+  "short_name": "Portal Guru",
+  "description": "Halaman induk aplikasi guru: Jurnal Mengajar dan Daftar Hadir Guru",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#5a9b86",
+  "lang": "id",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

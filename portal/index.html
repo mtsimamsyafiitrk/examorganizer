@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <title>Portal Aplikasi Guru | Al Imam Asy-Syafi'i Tarakan</title>
+
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"/>
+  <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png"/>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.webmanifest"/>
+  <meta name="theme-color" content="#5a9b86"/>
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <meta name="apple-mobile-web-app-title" content="Portal Guru"/>
+
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="portal-wrap">
+  <div class="portal-inner">
+
+    <header class="portal-head">
+      <img src="icons/icon-192.png" alt="Logo" class="portal-logo"/>
+      <h1 class="portal-title">Portal Aplikasi Guru</h1>
+      <p class="portal-sub">Al Imam Asy-Syafi'i Tarakan</p>
+    </header>
+
+    <!-- Diisi oleh app.js dari daftar APPS -->
+    <main id="app-grid" class="app-grid"></main>
+
+    <button id="btn-install" class="btn-install" hidden>
+      <span class="btn-install-ico" aria-hidden="true"></span>
+      Pasang Portal di Perangkat
+    </button>
+
+    <footer class="portal-foot">
+      Pilih aplikasi yang ingin dibuka.
+    </footer>
+
+  </div>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
