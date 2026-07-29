@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+  <title>Jurnal Mengajar Guru | MTs Al Imam Asy-Syafi'i Tarakan</title>
+
+  <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png"/>
+  <link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png"/>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.webmanifest"/>
+  <meta name="theme-color" content="#5a9b86"/>
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <meta name="apple-mobile-web-app-title" content="Jurnal Mengajar"/>
+
+  <link href="https://fonts.googleapis.com/css2?family=Amiri:ital,wght@0,400;0,700;1,400&family=Nunito:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading" class="loading-overlay">
+  <div class="spinner"></div>
+  <div id="loading-msg" style="color:var(--sage2);font-weight:800;font-size:15px">Memuat aplikasi...</div>
+</div>
+
+<!-- TOAST -->
+<div id="toast" class="toast"></div>
+
+<!-- ═══════════ LOGIN ═══════════ -->
+<div id="screen-login" class="screen">
+  <div class="login-wrap">
+    <div class="login-card">
+      <img src="assets/logo.png" alt="Logo" class="login-logo"/>
+      <div class="login-title">Jurnal Mengajar Guru</div>
+      <div class="login-sub" id="login-school">MTs Al Imam Asy-Syafi'i Tarakan</div>
+
+      <div class="tabbar" style="margin:18px 0 14px">
+        <button id="tab-role-guru" class="btn-tab active" onclick="setLoginRole('guru')">👨‍🏫 Guru</button>
+        <button id="tab-role-admin" class="btn-tab" onclick="setLoginRole('admin')">🛡️ Admin</button>
+      </div>
+
+      <div class="input-wrap">
+        <label>Username</label>
+        <input id="l-user" class="input" placeholder="Masukkan username" autocomplete="username"/>
+      </div>
+      <div class="input-wrap">
+        <label>Password</label>
+        <input id="l-pass" class="input" type="password" placeholder="Masukkan password" autocomplete="current-password"/>
+        <button class="eye" onclick="togglePw('l-pass',this)">👁️</button>
+      </div>
+      <div id="login-err" class="err-msg"></div>
+      <button class="btn btn-sage" style="width:100%;padding:13px;font-size:14px" onclick="doLogin()">Masuk</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════ GURU ═══════════ -->
+<div id="screen-guru" class="screen">
+  <div class="header">
+    <div class="hinner">
+      <div class="logo-gem">📖</div>
+      <div style="flex:1;min-width:0">
+        <div class="app-title">Jurnal Mengajar</div>
+        <div class="app-sub" id="g-header-sub"></div>
+      </div>
+      <button class="btn-icon" title="Keluar" onclick="doLogout()">🚪</button>
+    </div>
+  </div>
+  <div class="body">
+    <div id="page-g-home" class="page"></div>
+
+    <div id="page-g-jurnal" class="page">
+      <div class="card card-sage">
+        <div class="section-title" id="g-jurnal-form-title">📝 Isi Jurnal Mengajar</div>
+        <div class="grid2">
+          <div class="input-wrap"><label>Tanggal</label><input id="j-tanggal" class="input" type="date"/></div>
+          <div class="input-wrap"><label>Jam ke</label><input id="j-jamke" class="input" placeholder="cth: 1-2"/></div>
+        </div>
+        <div class="grid2">
+          <div class="input-wrap"><label>Rombel / Kelas</label><select id="j-rombel" class="input" onchange="renderAbsenList()"></select></div>
+          <div class="input-wrap"><label>Mata Pelajaran</label><select id="j-mapel" class="input"></select></div>
+        </div>
+        <div class="input-wrap"><label>Materi / Topik Pembelajaran</label><input id="j-materi" class="input" placeholder="Bab / elemen / topik yang diajarkan"/></div>
+        <div class="input-wrap"><label>Tujuan Pembelajaran (TP)</label><textarea id="j-tujuan" class="input" rows="2" placeholder="Tujuan pembelajaran sesuai CP/ATP"></textarea></div>
+        <div class="input-wrap"><label>Kegiatan Pembelajaran</label><textarea id="j-kegiatan" class="input" rows="2" placeholder="Ringkasan kegiatan (pendahuluan, inti, penutup)"></textarea></div>
+        <div class="grid2">
+          <div class="input-wrap"><label>Metode / Model</label><select id="j-metode" class="input"></select></div>
+          <div class="input-wrap"><label>Asesmen</label><select id="j-asesmen" class="input"></select></div>
+        </div>
+
+        <div class="input-wrap">
+          <label>💚 Integrasi Nilai Cinta (KBC)</label>
+          <div id="j-kbc" class="kbc-wrap"></div>
+        </div>
+        <div class="input-wrap"><label>Wujud Penerapan Nilai Cinta</label><textarea id="j-kbc-catatan" class="input" rows="2" placeholder="cth: Membuka pelajaran dengan doa & murajaah, menjaga kebersihan kelas..."></textarea></div>
+        <div class="input-wrap"><label>Refleksi / Catatan / Kendala</label><textarea id="j-refleksi" class="input" rows="2" placeholder="Refleksi pembelajaran, kendala, tindak lanjut (opsional)"></textarea></div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">✅ Absensi Siswa <span id="absen-counter" class="badge-mini"></span></div>
+        <div class="hint">Pilih rombel di atas, lalu tandai status tiap siswa. Default: Hadir.</div>
+        <div style="display:flex;gap:8px;margin:10px 0">
+          <button class="btn-ghost" onclick="setSemuaAbsen('H')">✔️ Semua Hadir</button>
+        </div>
+        <div id="absen-list"></div>
+      </div>
+
+      <div style="display:flex;gap:10px">
+        <button id="j-batal" class="btn btn-gray" style="flex:1;display:none" onclick="resetJurnalForm()">Batal</button>
+        <button class="btn btn-sage" style="flex:2;padding:13px;font-size:14px" onclick="simpanJurnal()">💾 Simpan Jurnal</button>
+      </div>
+    </div>
+
+    <div id="page-g-riwayat" class="page"></div>
+    <div id="page-g-rekap" class="page"></div>
+    <div id="page-g-akun" class="page"></div>
+  </div>
+
+  <nav class="navbar">
+    <button class="nav-btn active" data-page="home" onclick="gNav('home')"><span>🏠</span>Beranda</button>
+    <button class="nav-btn" data-page="jurnal" onclick="gNav('jurnal')"><span>📝</span>Jurnal</button>
+    <button class="nav-btn" data-page="riwayat" onclick="gNav('riwayat')"><span>📚</span>Riwayat</button>
+    <button class="nav-btn" data-page="rekap" onclick="gNav('rekap')"><span>📊</span>Rekap</button>
+    <button class="nav-btn" data-page="akun" onclick="gNav('akun')"><span>👤</span>Akun</button>
+  </nav>
+</div>
+
+<!-- ═══════════ ADMIN ═══════════ -->
+<div id="screen-admin" class="screen">
+  <div class="header">
+    <div class="hinner">
+      <div class="logo-gem">🛡️</div>
+      <div style="flex:1;min-width:0">
+        <div class="app-title">Panel Admin</div>
+        <div class="app-sub" id="a-header-sub">Jurnal Mengajar Guru</div>
+      </div>
+      <button class="btn-icon" title="Keluar" onclick="doLogout()">🚪</button>
+    </div>
+  </div>
+  <div class="body">
+    <div id="page-a-home" class="page"></div>
+    <div id="page-a-guru" class="page"></div>
+    <div id="page-a-siswa" class="page"></div>
+    <div id="page-a-jurnal" class="page"></div>
+    <div id="page-a-rekap" class="page"></div>
+    <div id="page-a-set" class="page"></div>
+  </div>
+
+  <nav class="navbar">
+    <button class="nav-btn active" data-page="home" onclick="aNav('home')"><span>🏠</span>Beranda</button>
+    <button class="nav-btn" data-page="guru" onclick="aNav('guru')"><span>👨‍🏫</span>Guru</button>
+    <button class="nav-btn" data-page="siswa" onclick="aNav('siswa')"><span>🧑‍🎓</span>Siswa</button>
+    <button class="nav-btn" data-page="jurnal" onclick="aNav('jurnal')"><span>📖</span>Jurnal</button>
+    <button class="nav-btn" data-page="rekap" onclick="aNav('rekap')"><span>📊</span>Rekap</button>
+    <button class="nav-btn" data-page="set" onclick="aNav('set')"><span>⚙️</span>Setelan</button>
+  </nav>
+</div>
+
+<!-- ═══════════ MODALS ═══════════ -->
+
+<!-- Modal tambah/edit guru -->
+<div id="modal-guru" class="modal">
+  <div class="modal-box">
+    <div class="modal-title" id="modal-guru-title">Tambah Guru</div>
+    <div class="input-wrap"><label>Nama Lengkap</label><input id="mg-nama" class="input" placeholder="Nama guru beserta gelar"/></div>
+    <div class="input-wrap"><label>NIP <span class="opt">(opsional)</span></label><input id="mg-nip" class="input" placeholder="NIP / NUPTK"/></div>
+    <div class="input-wrap"><label>Username</label><input id="mg-user" class="input" placeholder="Username untuk login" autocomplete="off"/></div>
+    <div class="input-wrap"><label>Mata Pelajaran yang Diampu</label><div id="mg-mapel" class="kbc-wrap"></div></div>
+    <div id="mg-pw-info" class="hint"></div>
+    <div class="modal-btns">
+      <button class="btn btn-gray" onclick="closeModal('modal-guru')">Batal</button>
+      <button class="btn btn-sage" onclick="simpanGuru()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal tambah/edit siswa -->
+<div id="modal-siswa" class="modal">
+  <div class="modal-box">
+    <div class="modal-title" id="modal-siswa-title">Tambah Siswa</div>
+    <div class="input-wrap"><label>Nama Lengkap</label><input id="ms-nama" class="input" placeholder="Nama siswa"/></div>
+    <div class="grid2">
+      <div class="input-wrap"><label>Rombel</label><select id="ms-rombel" class="input"></select></div>
+      <div class="input-wrap"><label>NISN</label><input id="ms-nisn" class="input" placeholder="NISN" inputmode="numeric"/></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-gray" onclick="closeModal('modal-siswa')">Batal</button>
+      <button class="btn btn-sage" onclick="simpanSiswa()">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal upload siswa -->
+<div id="modal-upload" class="modal">
+  <div class="modal-box">
+    <div class="modal-title">📤 Upload Data Siswa</div>
+    <div class="hint" style="margin-bottom:10px">
+      File Excel (.xlsx) dengan kolom: <b>Nama</b>, <b>Rombel</b>, <b>NISN</b> (baris pertama = judul kolom).
+      Data akan <b>ditambahkan</b> ke daftar; NISN yang sudah ada akan diperbarui.
+    </div>
+    <button class="btn-ghost" style="width:100%;margin-bottom:10px" onclick="downloadTemplateSiswa()">⬇️ Unduh Template Excel</button>
+    <input id="up-file" type="file" accept=".xlsx,.xls,.csv" class="input" style="padding:9px"/>
+    <div id="up-preview" class="hint" style="margin-top:8px"></div>
+    <div class="modal-btns">
+      <button class="btn btn-gray" onclick="closeModal('modal-upload')">Batal</button>
+      <button class="btn btn-sage" onclick="prosesUploadSiswa()">Upload</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal detail jurnal -->
+<div id="modal-jurnal" class="modal">
+  <div class="modal-box modal-lg">
+    <div class="modal-title">📖 Detail Jurnal</div>
+    <div id="mj-body"></div>
+    <div class="modal-btns">
+      <button class="btn btn-gray" style="width:100%" onclick="closeModal('modal-jurnal')">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal konfirmasi -->
+<div id="modal-confirm" class="modal">
+  <div class="modal-box">
+    <div class="modal-title" id="mc-title">Konfirmasi</div>
+    <div id="mc-msg" style="font-size:14px;color:var(--text2);line-height:1.6;margin-bottom:16px"></div>
+    <div class="modal-btns">
+      <button class="btn btn-gray" onclick="closeModal('modal-confirm')">Batal</button>
+      <button id="mc-ok" class="btn btn-rose">Ya, Lanjutkan</button>
+    </div>
+  </div>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
