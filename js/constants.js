@@ -41,6 +41,34 @@ export const ASESMEN_LIST = [
   "Observasi", "Penugasan", "Praktik / Unjuk Kerja"
 ];
 
+// ── PENILAIAN ──
+// Jenis penilaian sengaja dibuat sama dengan menu Penilaian di RDM
+// (Rapor Digital Madrasah) supaya tiap kolom di aplikasi ini bisa langsung
+// disalin ke kolom yang bersesuaian saat guru mengisi RDM.
+export const NILAI_JENIS = [
+  { key: "formatif", label: "Formatif / Harian",      sheet: "Formatif",  contoh: "cth: Latihan 1, Kuis Bab 2" },
+  { key: "sumatif",  label: "Sumatif Lingkup Materi", sheet: "Sumatif LM", contoh: "cth: Lingkup 1 — Bilangan Bulat" },
+  { key: "sas",      label: "Sumatif Akhir Semester", sheet: "SAS",        contoh: "cth: Sumatif Akhir Semester Ganjil" },
+];
+
+export const NILAI_JENIS_MAP = Object.fromEntries(NILAI_JENIS.map(j => [j.key, j]));
+
+// Predikat KKTP, urut dari terendah. Batas tuntas (kktpMin) diatur admin;
+// rentang di atasnya dibagi tiga sama panjang — lihat kktpDari() di utils.js.
+export const KKTP_PREDIKAT = [
+  { kode: "D", label: "Perlu Bimbingan", color: "#a86870" },
+  { kode: "C", label: "Cukup",           color: "#a8874d" },
+  { kode: "B", label: "Baik",            color: "#5a8aaa" },
+  { kode: "A", label: "Sangat Baik",     color: "#5a9b86" },
+];
+
+// Urutan siswa pada tabel & ekspor — samakan dengan urutan template Excel RDM
+// agar nilai bisa disalin satu kolom sekaligus tanpa tergeser.
+export const URUT_SISWA = [
+  { key: "nama", label: "Nama (A–Z)" },
+  { key: "nisn", label: "NISN" },
+];
+
 // Status kehadiran siswa.
 export const ABSEN_STATUS = [
   { key: "H", label: "Hadir", color: "#5a9b86", bg: "#e8f4f0" },
@@ -60,6 +88,11 @@ export const DEFAULT_SEKOLAH = {
   kota: "Tarakan",
   kepala: "",
   nipKepala: "",
+  // Penilaian: batas tuntas KKTP, bobot nilai akhir (samakan dengan menu
+  // Bobot di RDM), dan urutan siswa pada ekspor.
+  kktpMin: 70,
+  bobot: { formatif: 0, sumatif: 60, sas: 40 },
+  urutSiswa: "nama",
   rombel: ["7A", "7B", "8A", "8B", "9A", "9B"],
   mapel: [
     "Al-Qur'an Hadis", "Akidah Akhlak", "Fikih", "Sejarah Kebudayaan Islam",

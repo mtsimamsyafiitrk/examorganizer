@@ -11,14 +11,43 @@ Aplikasi web (PWA) jurnal mengajar guru untuk madrasah — **Kurikulum Merdeka K
 - **Riwayat jurnal** per bulan, bisa diedit/dihapus.
 - **Ekspor PDF laporan jurnal bulanan**: satu klik dari menu Riwayat, menghasilkan berkas siap cetak berisi kop madrasah, identitas guru, tabel seluruh pertemuan bulan tersebut (materi, TP, kegiatan/metode/asesmen, nilai KBC, rekap kehadiran), dan kolom tanda tangan guru & kepala madrasah.
 - **Rekap absensi** per rombel per bulan (khusus kelas yang diajar sendiri) + ekspor Excel.
+- **Nilai siswa (alat bantu input RDM)** — lihat bagian di bawah.
 - Pengaturan data guru: data diri, data pendidikan/lulusan, dan kepegawaian (password dikelola admin).
+
+### 📊 Nilai Siswa — alat bantu, bukan pengganti RDM
+
+Rapor resmi tetap terbit dari **RDM (Rapor Digital Madrasah)**. Menu Nilai di sini
+berfungsi sebagai *buku nilai guru*: tempat mengolah nilai sepanjang semester,
+lalu memindahkannya ke RDM tanpa mengetik ulang satu per satu.
+
+- **Jenis penilaian mengikuti menu Penilaian di RDM** — Formatif/Harian, Sumatif
+  Lingkup Materi, dan Sumatif Akhir Semester (SAS, dibatasi satu per mapel per
+  semester). Satu penilaian di aplikasi = satu kolom di RDM.
+- **Input per rombel + mapel**: daftar siswa muncul otomatis, tinggal isi angka
+  0–100. Nilai kosong berarti belum dinilai dan tidak ikut dihitung.
+- **Urutan siswa bisa disamakan dengan template Excel RDM** (Nama A–Z atau NISN,
+  diatur admin) sehingga satu kolom nilai bisa disalin sekaligus tanpa tergeser.
+- **Salin per kolom** ke papan klip (satu nilai per baris) — untuk di-*paste*
+  langsung ke satu kolom di template RDM. Tersedia juga untuk kolom NA dan deskripsi.
+- **Leger & deskripsi**: rata-rata tiap komponen, Nilai Akhir berbobot, predikat
+  KKTP, dan **deskripsi capaian otomatis** (menyorot penilaian tertinggi dan
+  terendah) yang tinggal disalin ke kolom deskripsi RDM.
+- **Ekspor Excel** multi-sheet: `Formatif`, `Sumatif LM`, `SAS`, dan `Leger`.
+
+Nilai Akhir memakai bobot yang diatur admin — **samakan dengan menu Bobot di RDM**.
+Komponen yang belum ada nilainya diabaikan dan bobotnya dinormalkan ulang, agar NA
+tetap wajar saat semester masih berjalan.
+
+Predikat KKTP memakai empat interval. Batas tuntas diatur admin (default 70);
+rentang di atasnya dibagi tiga — dengan batas 70: 70–79 Cukup, 80–89 Baik,
+90–100 Sangat Baik, dan di bawah 70 Perlu Bimbingan.
 
 ### 🛡️ Admin
 - **Kelola akun guru**: tambah/edit/hapus akun, atur mapel yang diampu, atur/reset password guru (guru tidak dapat mengganti password sendiri).
 - **Kelola data siswa** sederhana (Nama, Rombel, NISN): tambah manual atau **upload Excel** (template disediakan), hapus per siswa atau per rombel.
 - **Monitor jurnal** semua guru per tanggal, dengan dua ekspor: **Excel sebulan** (jurnal semua guru) dan **PDF per guru** (laporan bulanan guru terpilih, format sama seperti yang dicetak guru).
 - **Rekap absensi** seluruh rombel + ekspor Excel.
-- **Pengaturan**: identitas madrasah, tahun pelajaran/semester, kota & nama/NIP kepala madrasah (dipakai pada kop dan kolom tanda tangan PDF), daftar rombel, daftar mapel, akun admin.
+- **Pengaturan**: identitas madrasah, tahun pelajaran/semester, kota & nama/NIP kepala madrasah (dipakai pada kop dan kolom tanda tangan PDF), **pengaturan penilaian** (batas tuntas KKTP, bobot Nilai Akhir, urutan siswa pada ekspor), daftar rombel, daftar mapel, akun admin.
 
 ## Teknologi
 - HTML/CSS/JavaScript murni (tanpa build step) — bisa dihosting di GitHub Pages.
@@ -32,16 +61,17 @@ Aplikasi web (PWA) jurnal mengajar guru untuk madrasah — **Kurikulum Merdeka K
 | Koleksi/Dokumen | Isi |
 |---|---|
 | `jm_config/admin` | `{username, pwHash}` |
-| `jm_config/sekolah` | `{nama, tahunPelajaran, semester, kota, kepala, nipKepala, rombel[], mapel[]}` |
+| `jm_config/sekolah` | `{nama, tahunPelajaran, semester, kota, kepala, nipKepala, kktpMin, bobot{formatif,sumatif,sas}, urutSiswa, rombel[], mapel[]}` |
 | `jm_guru/{id}` | `{nama, nip, username, pwHash, mapel[]}` |
 | `jm_siswa/{id}` | `{nama, rombel, nisn}` |
 | `jm_jurnal/{id}` | jurnal + `absen{siswaId: H\|S\|I\|A}` + `rekap{H,S,I,A}` |
+| `jm_nilai/{id}` | satu kolom penilaian: `{guruId, mapel, rombel, tahunPelajaran, semester, jenis, nama, urut, nilai{siswaId: 0..100}}` |
 
 ## Memulai
 
 1. Buka aplikasi, pilih tab **Admin**, login dengan username `admin` dan password default `Madras0h!`.
 2. Segera ganti username/password admin di menu **Setelan**.
-3. Atur identitas madrasah, tahun pelajaran, kota, nama & NIP kepala madrasah (untuk kop/tanda tangan PDF), daftar rombel, dan daftar mapel.
+3. Atur identitas madrasah, tahun pelajaran, kota, nama & NIP kepala madrasah (untuk kop/tanda tangan PDF), **pengaturan penilaian** (batas KKTP, bobot Nilai Akhir, urutan siswa — samakan dengan RDM), daftar rombel, dan daftar mapel.
 4. Tambahkan **akun guru** (password awal: `guru123`, bisa diatur sendiri oleh admin saat menambah/mengedit guru).
 5. Upload **data siswa** dari Excel (kolom: Nama, Rombel, NISN) atau input manual.
 6. Guru login dan mulai mengisi jurnal mengajar + absensi.
