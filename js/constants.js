@@ -56,6 +56,10 @@ export const DEFAULT_SEKOLAH = {
   nama: "MTs Al Imam Asy-Syafi'i Tarakan",
   tahunPelajaran: "2026/2027",
   semester: "Ganjil",
+  // Dipakai pada kop & blok tanda tangan laporan PDF jurnal bulanan.
+  kota: "Tarakan",
+  kepala: "",
+  nipKepala: "",
   rombel: ["7A", "7B", "8A", "8B", "9A", "9B"],
   mapel: [
     "Al-Qur'an Hadis", "Akidah Akhlak", "Fikih", "Sejarah Kebudayaan Islam",

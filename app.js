@@ -30,6 +30,7 @@ import {
 import { hashPw, uid, dk, esc, fmtTanggal, cmpRombel, cmpNama, hitungRekap } from "./js/utils.js";
 import { showLoading, hideLoading, showToast, showScreen, openModal, closeModal, togglePw } from "./js/ui-helpers.js";
 import { ico, initIcons } from "./js/icons.js";
+import { buildJurnalBulananPDF, namaFilePDF, namaBulan, pdfDownload } from "./js/pdf-jurnal.js";
 
 // ── STATE ──
 let loginRole = 'guru';
@@ -412,10 +413,14 @@ async function renderGRiwayat() {
   const bulan = el.dataset.bulan || dk().slice(0, 7);
   el.innerHTML = `
     <div class="card">
-      <div class="section-title">${ico('book',15)} Riwayat Jurnal</div>
+      <div class="section-title" style="justify-content:space-between">
+        <span>${ico('book',15)} Riwayat Jurnal</span>
+        <button class="btn-ghost" onclick="exportPdfRiwayat()">${ico('download',13)} Ekspor PDF</button>
+      </div>
       <div class="filter-row">
         <input id="riw-bulan" class="input" type="month" value="${bulan}" onchange="gRiwayatBulan(this.value)"/>
       </div>
+      <div class="hint" style="margin-bottom:8px">Ekspor PDF menghasilkan laporan jurnal bulan terpilih lengkap dengan kop madrasah dan kolom tanda tangan, siap dicetak.</div>
       <div id="riw-list"><div class="empty">Memuat...</div></div>
     </div>`;
   try {
@@ -996,7 +1001,10 @@ async function renderAJurnal() {
     <div class="card">
       <div class="section-title" style="justify-content:space-between">
         <span>${ico('clipboard',15)} Monitor Jurnal</span>
-        <button class="btn-ghost" onclick="exportJurnalBulan()">${ico('download',13)} Ekspor bulan</button>
+        <span style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn-ghost" onclick="exportJurnalBulan()">${ico('download',13)} Excel sebulan</button>
+          <button class="btn-ghost" onclick="exportPdfJurnalGuru()">${ico('download',13)} PDF per guru</button>
+        </span>
       </div>
       <div class="filter-row">
         <input class="input" type="date" value="${tgl}" onchange="aJurnalTgl(this.value)"/>
@@ -1005,6 +1013,7 @@ async function renderAJurnal() {
           ${guruList.map(g => `<option value="${g.id}" ${g.id === guruF ? 'selected' : ''}>${esc(g.nama)}</option>`).join('')}
         </select>
       </div>
+      <div class="hint" style="margin-bottom:8px">Ekspor mengikuti <b>bulan dari tanggal</b> di atas. <b>Excel sebulan</b> memuat jurnal semua guru; <b>PDF per guru</b> mencetak laporan bulanan guru yang dipilih (kop madrasah + kolom tanda tangan).</div>
       <div id="aj-list"><div class="empty">Memuat...</div></div>
     </div>`;
   try {
@@ -1046,6 +1055,48 @@ async function exportJurnalBulan() {
     xlsxDownload(wb, `jurnal_mengajar_${ym}.xlsx`);
   } catch (e) { console.error(e); showToast('Gagal ekspor.', false); }
   hideLoading();
+}
+
+// ═══════════════════ EKSPOR PDF: JURNAL BULANAN PER GURU ═══════════════════
+// Dipakai dua sisi: guru mencetak jurnalnya sendiri dari menu Riwayat, admin
+// mencetak jurnal guru mana pun dari menu Monitor Jurnal.
+
+async function exportPdfJurnalBulanan(guru, ym, fetchList) {
+  showLoading('Menyiapkan PDF...');
+  try {
+    const list = await fetchList();
+    if (!list.length) {
+      hideLoading();
+      showToast(`Tidak ada jurnal pada ${namaBulan(ym)}.`, false);
+      return;
+    }
+    const pdf = await buildJurnalBulananPDF({ sekolah, guru, ym, list });
+    pdfDownload(pdf, namaFilePDF(guru.nama, ym));
+    showToast(`PDF ${list.length} pertemuan berhasil dibuat.`);
+  } catch (e) {
+    console.error(e);
+    showToast('Gagal membuat PDF. Periksa koneksi internet.', false);
+  }
+  hideLoading();
+}
+
+// Guru: jurnal miliknya sendiri, bulan yang sedang dipilih di menu Riwayat.
+function exportPdfRiwayat() {
+  const ym = document.getElementById('page-g-riwayat').dataset.bulan || dk().slice(0, 7);
+  return exportPdfJurnalBulanan(currentUser, ym, async () =>
+    (await jurnalByGuru(currentUser.id)).filter(j => (j.tanggal || '').startsWith(ym)));
+}
+
+// Admin: mengikuti filter guru & bulan (dari tanggal) di menu Monitor Jurnal.
+function exportPdfJurnalGuru() {
+  const el = document.getElementById('page-a-jurnal');
+  const guruId = el.dataset.guru || '';
+  if (!guruId) { showToast('Pilih guru terlebih dahulu untuk ekspor PDF.', false); return; }
+  const guru = guruList.find(g => g.id === guruId);
+  if (!guru) { showToast('Data guru tidak ditemukan.', false); return; }
+  const ym = (el.dataset.tgl || dk()).slice(0, 7);
+  return exportPdfJurnalBulanan(guru, ym, async () =>
+    (await jurnalByRange(ym + '-01', ym + '-31')).filter(j => j.guruId === guruId));
 }
 
 // ═══════════════════ REKAP ABSENSI (guru & admin) ═══════════════════
@@ -1156,6 +1207,9 @@ function renderASet() {
   const curNama = document.getElementById('set-nama')?.value;
   const curTp = document.getElementById('set-tp')?.value;
   const curSmt = document.getElementById('set-smt')?.value || sekolah.semester;
+  const curKota = document.getElementById('set-kota')?.value;
+  const curKepala = document.getElementById('set-kepala')?.value;
+  const curNipKepala = document.getElementById('set-nip-kepala')?.value;
   const el = document.getElementById('page-a-set');
   el.innerHTML = `
     <div class="card card-sage">
@@ -1169,6 +1223,12 @@ function renderASet() {
             <option ${curSmt === 'Genap' ? 'selected' : ''}>Genap</option>
           </select></div>
       </div>
+      <div class="hint" style="margin:2px 0 10px">Data di bawah dipakai untuk kop dan kolom tanda tangan pada laporan PDF jurnal bulanan guru.</div>
+      <div class="grid2">
+        <div class="input-wrap"><label>Kota / Tempat</label><input id="set-kota" class="input" value="${esc(curKota ?? sekolah.kota ?? '')}" placeholder="cth: Tarakan"/></div>
+        <div class="input-wrap"><label>NIP Kepala Madrasah <span class="opt">(opsional)</span></label><input id="set-nip-kepala" class="input" value="${esc(curNipKepala ?? sekolah.nipKepala ?? '')}" placeholder="NIP / NUPTK"/></div>
+      </div>
+      <div class="input-wrap"><label>Nama Kepala Madrasah <span class="opt">(opsional)</span></label><input id="set-kepala" class="input" value="${esc(curKepala ?? sekolah.kepala ?? '')}" placeholder="Nama beserta gelar"/></div>
     </div>
     <div class="card">
       <div class="section-title">${ico('tag',15)} Daftar Rombel</div>
@@ -1255,6 +1315,9 @@ async function simpanSekolah() {
     await saveSekolahDoc({
       nama, tahunPelajaran: tp,
       semester: document.getElementById('set-smt').value,
+      kota: document.getElementById('set-kota').value.trim(),
+      kepala: document.getElementById('set-kepala').value.trim(),
+      nipKepala: document.getElementById('set-nip-kepala').value.trim(),
     });
     document.getElementById('a-header-sub').textContent =
       `${sekolah.nama} · TP ${sekolah.tahunPelajaran} · ${sekolah.semester}`;
@@ -1458,6 +1521,7 @@ Object.assign(window, {
   aSiswaFilter, openModalSiswa, simpanSiswa, hapusSiswa, hapusSiswaRombel,
   openModalUpload, downloadTemplateSiswa, prosesUploadSiswa,
   aJurnalTgl, aJurnalGuru, exportJurnalBulan,
+  exportPdfRiwayat, exportPdfJurnalGuru,
   rekapSet, exportRekap,
   setAddItem, setDelItem, simpanSekolah, simpanAdmin,
   kelolaRombel, renameRombel, migrasiSiswa, masukkanSiswa,
