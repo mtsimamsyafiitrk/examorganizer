@@ -52,8 +52,25 @@ predikat yang dilihat guru selalu sejalan.
 - **Kelola akun guru**: tambah/edit/hapus akun, atur mapel yang diampu, atur/reset password guru (guru tidak dapat mengganti password sendiri).
 - **Kelola data siswa** sederhana (Nama, Rombel, NISN): tambah manual atau **upload Excel** (template disediakan), hapus per siswa atau per rombel.
 - **Monitor jurnal** semua guru per tanggal, dengan dua ekspor: **Excel sebulan** (jurnal semua guru) dan **PDF per guru** (laporan bulanan guru terpilih, format sama seperti yang dicetak guru).
-- **Rekap absensi** seluruh rombel + ekspor Excel.
+- **Rekap** dua tab: **Absensi** seluruh rombel, dan **Nilai** (lihat di bawah). Keduanya bisa diekspor ke Excel.
 - **Pengaturan**: identitas madrasah, tahun pelajaran/semester, kota & nama/NIP kepala madrasah (dipakai pada kop dan kolom tanda tangan PDF), **pengaturan penilaian** (batas tuntas KKTP default + per mapel, bobot Nilai Akhir, urutan siswa pada ekspor), daftar rombel, daftar mapel, akun admin.
+
+#### Rekap Nilai (tab Nilai di menu Rekap admin)
+
+- **Kelengkapan penilaian** — satu baris per guru × rombel × mapel: berapa
+  penilaian tiap jenis sudah dibuat dan berapa persen siswa sudah dinilai.
+  Kolom SAS bertanda merah bila Sumatif Akhir Semester belum dibuat, sehingga
+  guru yang belum selesai gampang ditagih menjelang tenggat rapor.
+- **Rincian nilai per guru** — ketuk satu baris untuk melihat seluruh nilai
+  siswa pada mapel itu. **Hanya baca**; perubahan tetap lewat akun gurunya.
+- **Leger per rombel lintas mapel** — Nilai Akhir tiap mapel untuk satu rombel,
+  dipakai wali kelas dan kurikulum mencocokkan dengan RDM. Angka merah berarti
+  di bawah batas tuntas KKTP mapel tersebut.
+- **Ekspor Excel gabungan** — satu berkas berisi lembar `Kelengkapan` plus
+  lembar leger untuk tiap rombel yang sudah punya nilai.
+
+Rekap ini hanya mencakup tahun pelajaran & semester yang sedang berjalan, sama
+seperti menu Nilai milik guru.
 
 ## Teknologi
 - HTML/CSS/JavaScript murni (tanpa build step) — bisa dihosting di GitHub Pages.

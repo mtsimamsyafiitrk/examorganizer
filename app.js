@@ -37,7 +37,7 @@ import {
   NILAI_JENIS, NILAI_JENIS_MAP, URUT_SISWA
 } from "./js/constants.js";
 import {
-  hashPw, uid, dk, esc, fmtTanggal, cmpRombel, cmpNama, hitungRekap,
+  hashPw, uid, dk, esc, escArg, fmtTanggal, cmpRombel, cmpNama, hitungRekap,
   num, rata, bulat, kktpDari, urutkanSiswa, deskripsiCapaian
 } from "./js/utils.js";
 import { showLoading, hideLoading, showToast, showScreen, openModal, closeModal, togglePw } from "./js/ui-helpers.js";
@@ -60,6 +60,8 @@ let aSetState = null;          // salinan pengaturan sekolah saat diedit
 let nilaiList = [];            // dokumen jm_nilai milik guru yang login
 let nilaiInputState = {};      // {siswaId: '' | angka} saat mengisi satu kolom penilaian
 let nilaiDirty = false;        // ada isian nilai yang belum disimpan
+let nilaiSemua = [];           // seluruh jm_nilai (admin) — untuk rekap & monitoring
+let nilaiSemuaLoaded = false;
 
 const SESSION_KEY = 'jm_session';
 
@@ -203,6 +205,10 @@ async function enterApp() {
   if (currentUser.role === 'admin') {
     document.getElementById('a-header-sub').textContent =
       `${sekolah.nama} · TP ${sekolah.tahunPelajaran} · ${sekolah.semester}`;
+    // Data nilai dimuat ulang tiap masuk, dan filter rekap dimulai bersih.
+    nilaiSemua = []; nilaiSemuaLoaded = false;
+    for (const k of ['tab', 'detail', 'nrombel', 'ym', 'rombel', 'mapel'])
+      delete document.getElementById('page-a-rekap').dataset[k];
     showScreen('admin');
     aNav('home');
   } else {
@@ -1261,7 +1267,7 @@ function renderASiswa() {
           <option value="">Semua rombel</option>
           ${rombelListSiswa().map(r => `<option value="${esc(r)}" ${r === filter ? 'selected' : ''}>${esc(r)}</option>`).join('')}
         </select>
-        ${filter ? `<button class="btn-ghost" style="color:var(--rose2)" onclick="hapusSiswaRombel('${esc(filter)}')">${ico('trash',13)} Hapus rombel ini</button>` : ''}
+        ${filter ? `<button class="btn-ghost" style="color:var(--rose2)" onclick="hapusSiswaRombel('${escArg(filter)}')">${ico('trash',13)} Hapus rombel ini</button>` : ''}
       </div>
       ${list.length ? list.map(s => `
         <div class="item">
@@ -1547,15 +1553,39 @@ function exportPdfJurnalGuru() {
 }
 
 // ═══════════════════ REKAP ABSENSI (guru & admin) ═══════════════════
-function renderARekap() { renderRekapPage('page-a-rekap', false); }
+// Halaman Rekap admin punya dua tab: absensi (lama) dan nilai. Navbar admin
+// sudah padat, jadi rekap nilai menumpang di sini alih-alih jadi menu baru.
+function renderARekap() {
+  const el = document.getElementById('page-a-rekap');
+  const tab = el.dataset.tab || 'absensi';
+  el.innerHTML = `
+    <div class="tabbar" style="margin-bottom:12px">
+      <button class="btn-tab ${tab === 'absensi' ? 'active' : ''}" onclick="aRekapTab('absensi')">${ico('check-square', 15)} Absensi</button>
+      <button class="btn-tab ${tab === 'nilai' ? 'active' : ''}" onclick="aRekapTab('nilai')">${ico('star', 15)} Nilai</button>
+    </div>
+    <div id="a-rekap-body"></div>`;
+  if (tab === 'absensi') renderRekapPage('page-a-rekap', false, 'a-rekap-body');
+  else renderARekapNilai();
+}
 
-function renderRekapPage(pageId, guruOnly) {
+function aRekapTab(tab) {
+  const el = document.getElementById('page-a-rekap');
+  el.dataset.tab = tab;
+  // Guru bisa saja baru mengisi nilai; ambil ulang tiap kali tab dibuka,
+  // tetapi tidak saat berpindah rombel atau membuka rincian.
+  if (tab === 'nilai') { nilaiSemuaLoaded = false; delete el.dataset.detail; }
+  renderARekap();
+}
+
+// State filter dibaca dari elemen pageId (yang tetap ada saat tab berganti),
+// sedangkan HTML ditulis ke targetId.
+function renderRekapPage(pageId, guruOnly, targetId = pageId) {
   const el = document.getElementById(pageId);
   const ym = el.dataset.ym || dk().slice(0, 7);
   const rombel = el.dataset.rombel || '';
   const mapel = el.dataset.mapel || '';
   const mapelOpts = guruOnly && currentUser.mapel?.length ? currentUser.mapel : sekolah.mapel;
-  el.innerHTML = `
+  document.getElementById(targetId).innerHTML = `
     <div class="card">
       <div class="section-title" style="justify-content:space-between">
         <span>${ico('chart',15)} Rekap Absensi Siswa</span>
@@ -1578,7 +1608,8 @@ function renderRekapPage(pageId, guruOnly) {
 }
 function rekapSet(pageId, key, val, guruOnly) {
   document.getElementById(pageId).dataset[key] = val;
-  renderRekapPage(pageId, guruOnly);
+  if (pageId === 'page-a-rekap') renderARekap();
+  else renderRekapPage(pageId, guruOnly);
 }
 
 async function hitungRekapData(pageId, guruOnly) {
@@ -1641,6 +1672,218 @@ async function exportRekap(pageId, guruOnly) {
     XLSX.utils.book_append_sheet(wb, ws, `Rekap ${rombel}`);
     xlsxDownload(wb, `rekap_absensi_${rombel}_${ym}${mapel ? '_' + mapel.replace(/\W+/g, '') : ''}.xlsx`);
     showToast(`Rekap ${pertemuan} pertemuan diekspor.`);
+  } catch (e) { console.error(e); showToast('Gagal ekspor.', false); }
+  hideLoading();
+}
+
+// ═══════════════════ ADMIN: REKAP NILAI ═══════════════════
+// Admin memakai seluruh dokumen jm_nilai (semua guru), sedangkan menu Nilai
+// guru hanya memuat miliknya sendiri.
+
+async function loadNilaiSemua() {
+  const snap = await getDocs(collection(fs, 'jm_nilai'));
+  nilaiSemua = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+// Hanya TP & semester yang sedang berjalan — sama dengan cakupan menu guru.
+function nilaiAktif() {
+  return nilaiSemua.filter(n =>
+    n.tahunPelajaran === sekolah.tahunPelajaran && n.semester === sekolah.semester);
+}
+
+function namaGuru(guruId) {
+  return guruList.find(g => g.id === guruId)?.nama || '(guru sudah dihapus)';
+}
+
+// Satu baris per kombinasi guru × mapel × rombel.
+function rekapKelengkapan() {
+  const peta = new Map();
+  for (const n of nilaiAktif()) {
+    const k = `${n.guruId}|${n.mapel}|${n.rombel}`;
+    if (!peta.has(k)) {
+      peta.set(k, {
+        kunci: k, guruId: n.guruId, mapel: n.mapel, rombel: n.rombel,
+        formatif: 0, sumatif: 0, sas: 0, terisi: 0, sel: 0,
+      });
+    }
+    const r = peta.get(k);
+    if (r[n.jenis] !== undefined) r[n.jenis]++;
+    r.sel += siswaByRombel(n.rombel).length;
+    r.terisi += Object.values(n.nilai || {}).filter(v => num(v) !== null).length;
+  }
+  return [...peta.values()]
+    .map(r => ({ ...r, guru: namaGuru(r.guruId), persen: r.sel ? Math.round(r.terisi / r.sel * 100) : 0 }))
+    .sort((a, b) => a.guru.localeCompare(b.guru, 'id')
+      || cmpRombel(a.rombel, b.rombel)
+      || a.mapel.localeCompare(b.mapel, 'id'));
+}
+
+// Leger satu rombel lintas mapel: NA tiap mapel per siswa.
+function legerRombel(rombel) {
+  const list = nilaiAktif().filter(n => n.rombel === rombel);
+  const mapelSet = [...new Set(list.map(n => n.mapel))].sort((a, b) => a.localeCompare(b, 'id'));
+  const siswa = urutkanSiswa(siswaByRombel(rombel), sekolah.urutSiswa);
+  const baris = siswa.map(s => {
+    const na = {};
+    for (const m of mapelSet) {
+      const kol = list.filter(n => n.mapel === m);
+      const val = k => num(k.nilai?.[s.id]);
+      const sasK = kol.find(k => k.jenis === 'sas');
+      na[m] = bulat(hitungNA(
+        rata(kol.filter(k => k.jenis === 'formatif').map(val)),
+        rata(kol.filter(k => k.jenis === 'sumatif').map(val)),
+        sasK ? val(sasK) : null));
+    }
+    return { s, na };
+  });
+  return { mapelSet, siswa, baris };
+}
+
+async function renderARekapNilai() {
+  const el = document.getElementById('page-a-rekap');
+  const body = document.getElementById('a-rekap-body');
+  if (!nilaiSemuaLoaded) {
+    body.innerHTML = `<div class="empty">Memuat data nilai...</div>`;
+    try { await loadNilaiSemua(); nilaiSemuaLoaded = true; }
+    catch (e) { console.error(e); body.innerHTML = `<div class="empty">Gagal memuat data nilai.</div>`; return; }
+  }
+  if (el.dataset.detail) { renderDetailNilai(el.dataset.detail); return; }
+
+  const rows = rekapKelengkapan();
+  const rombel = el.dataset.nrombel || '';
+  body.innerHTML = `
+    <div class="card">
+      <div class="section-title" style="justify-content:space-between">
+        <span>${ico('clipboard', 15)} Kelengkapan Penilaian</span>
+        <button class="btn-ghost" onclick="exportRekapNilai()">${ico('download', 13)} Ekspor Excel</button>
+      </div>
+      <div class="hint" style="margin-bottom:8px">
+        TP ${esc(sekolah.tahunPelajaran)} semester ${esc(sekolah.semester)}.
+        Ketuk satu baris untuk melihat rincian nilainya. Kolom SAS bertanda merah
+        berarti Sumatif Akhir Semester belum dibuat.
+      </div>
+      ${rows.length ? `<div class="table-wrap"><table class="tbl">
+        <tr><th>Guru</th><th>Rombel</th><th>Mapel</th><th class="num">F</th><th class="num">SLM</th>
+            <th class="num">SAS</th><th class="num">Terisi</th></tr>
+        ${rows.map(r => `<tr style="cursor:pointer" onclick="bukaDetailNilai('${escArg(r.kunci)}')">
+          <td>${esc(r.guru)}</td>
+          <td>${esc(r.rombel)}</td>
+          <td>${esc(r.mapel)}</td>
+          <td class="num">${r.formatif}</td>
+          <td class="num">${r.sumatif}</td>
+          <td class="num" style="font-weight:900;color:${r.sas ? '#5a9b86' : '#a86870'}">${r.sas || '–'}</td>
+          <td class="num" style="font-weight:800;color:${r.persen >= 100 ? '#5a9b86' : r.persen >= 50 ? '#a8874d' : '#a86870'}">${r.persen}%</td>
+        </tr>`).join('')}
+      </table></div>` : '<div class="empty">Belum ada guru yang mengisi nilai pada semester ini.</div>'}
+    </div>
+
+    <div class="card">
+      <div class="section-title">${ico('chart', 15)} Leger Nilai per Rombel</div>
+      <div class="hint" style="margin-bottom:8px">
+        Nilai Akhir tiap mapel untuk satu rombel — dipakai wali kelas dan kurikulum
+        mencocokkan dengan RDM. Angka merah berarti di bawah batas tuntas KKTP mapel itu.
+      </div>
+      <div class="filter-row">
+        <select class="input" onchange="rekapSet('page-a-rekap','nrombel',this.value,false)">
+          <option value="">— pilih rombel —</option>
+          ${rombelListSiswa().map(r => `<option value="${esc(r)}" ${r === rombel ? 'selected' : ''}>${esc(r)}</option>`).join('')}
+        </select>
+      </div>
+      ${rombel ? blokLegerRombel(rombel) : '<div class="empty">Pilih rombel untuk melihat leger.</div>'}
+    </div>`;
+}
+
+function blokLegerRombel(rombel) {
+  const { mapelSet, baris } = legerRombel(rombel);
+  if (!baris.length) return `<div class="empty">Belum ada data siswa untuk rombel ${esc(rombel)}.</div>`;
+  if (!mapelSet.length) return `<div class="empty">Belum ada nilai yang diisi untuk rombel ini.</div>`;
+  return `
+    <div class="table-wrap"><table class="tbl">
+      <tr><th>#</th><th>Nama</th>${mapelSet.map(m => `<th class="num">${esc(m)}</th>`).join('')}</tr>
+      ${baris.map((r, i) => `<tr>
+        <td>${i + 1}</td><td>${esc(r.s.nama)}</td>
+        ${mapelSet.map(m => {
+          const v = r.na[m];
+          if (v === null || v === undefined) return '<td class="num" style="color:var(--muted)">–</td>';
+          const tuntas = v >= kktpUntuk(m);
+          return `<td class="num" style="font-weight:800;color:${tuntas ? '' : '#a86870'}">${v}</td>`;
+        }).join('')}
+      </tr>`).join('')}
+    </table></div>`;
+}
+
+// Rincian nilai satu guru pada satu mapel & rombel — hanya baca.
+function bukaDetailNilai(kunci) {
+  document.getElementById('page-a-rekap').dataset.detail = kunci;
+  renderARekap();
+}
+function tutupDetailNilai() {
+  delete document.getElementById('page-a-rekap').dataset.detail;
+  renderARekap();
+}
+
+function renderDetailNilai(kunci) {
+  const body = document.getElementById('a-rekap-body');
+  const [guruId, mapel, rombel] = kunci.split('|');
+  const kolom = nilaiAktif()
+    .filter(n => n.guruId === guruId && n.mapel === mapel && n.rombel === rombel)
+    .sort((a, b) => NILAI_JENIS.findIndex(j => j.key === a.jenis) - NILAI_JENIS.findIndex(j => j.key === b.jenis)
+      || (a.urut || 0) - (b.urut || 0));
+  const siswa = urutkanSiswa(siswaByRombel(rombel), sekolah.urutSiswa);
+  body.innerHTML = `
+    <div class="card card-sage">
+      <div class="section-title" style="justify-content:space-between">
+        <span>${ico('star', 15)} Rincian Nilai</span>
+        <button class="btn-ghost" onclick="tutupDetailNilai()">${ico('chevron', 13)} Kembali</button>
+      </div>
+      <div class="hint">
+        <b>${esc(namaGuru(guruId))}</b> · ${esc(mapel)} · ${esc(rombel)} ·
+        batas tuntas KKTP <b>${kktpUntuk(mapel)}</b>. Tampilan ini hanya baca —
+        perubahan nilai tetap lewat akun guru yang bersangkutan.
+      </div>
+    </div>
+    <div class="card">
+      ${kolom.length ? `<div class="table-wrap"><table class="tbl">
+        <tr><th>#</th><th>Nama</th>${kolom.map(k =>
+          `<th class="num" title="${esc(NILAI_JENIS_MAP[k.jenis]?.label || '')}">${esc(k.nama)}</th>`).join('')}</tr>
+        ${siswa.map((s, i) => `<tr>
+          <td>${i + 1}</td><td>${esc(s.nama)}</td>
+          ${kolom.map(k => {
+            const v = num(k.nilai?.[s.id]);
+            return v === null
+              ? '<td class="num" style="color:var(--muted)">–</td>'
+              : `<td class="num" style="font-weight:800;color:${v >= kktpUntuk(mapel) ? '' : '#a86870'}">${v}</td>`;
+          }).join('')}
+        </tr>`).join('')}
+      </table></div>` : '<div class="empty">Belum ada penilaian.</div>'}
+    </div>`;
+}
+
+async function exportRekapNilai() {
+  const rows = rekapKelengkapan();
+  if (!rows.length) { showToast('Belum ada nilai untuk diekspor.', false); return; }
+  showLoading('Menyiapkan ekspor...');
+  try {
+    const XLSX = await ensureXLSX();
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows.map(r => ({
+      Guru: r.guru, Rombel: r.rombel, Mapel: r.mapel,
+      Formatif: r.formatif, 'Sumatif LM': r.sumatif, SAS: r.sas,
+      'Terisi (%)': r.persen,
+    }))), 'Kelengkapan');
+
+    // Leger tiap rombel yang sudah punya nilai, satu sheet per rombel.
+    for (const rombel of rombelListSiswa()) {
+      const { mapelSet, baris } = legerRombel(rombel);
+      if (!mapelSet.length || !baris.length) continue;
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(baris.map((r, i) => {
+        const o = { No: i + 1, NISN: r.s.nisn || '', Nama: r.s.nama };
+        for (const m of mapelSet) o[m] = r.na[m] ?? '';
+        return o;
+      })), `Leger ${rombel}`.slice(0, 31));
+    }
+    xlsxDownload(wb, `rekap_nilai_${sekolah.semester}_${sekolah.tahunPelajaran.replace('/', '-')}.xlsx`);
+    showToast('Rekap nilai diekspor.');
   } catch (e) { console.error(e); showToast('Gagal ekspor.', false); }
   hideLoading();
 }
@@ -1733,7 +1976,7 @@ function renderASet() {
       <div class="section-title">${ico('tag',15)} Daftar Rombel</div>
       <div class="hint" style="margin-bottom:8px">Klik nama rombel untuk mengelola: ganti nama, atur anggota, dan migrasi siswa ke rombel setingkat. Perubahan langsung tersimpan otomatis; menghapus rombel tidak menghapus data siswanya.</div>
       <div class="kbc-wrap" style="margin-bottom:10px">
-        ${aSetState.rombel.map(r => `<div class="chip on"><span style="cursor:pointer" title="Kelola rombel" onclick="kelolaRombel('${esc(r)}')">${esc(r)}</span><span style="cursor:pointer;display:inline-flex" title="Hapus" onclick="setDelItem('rombel','${esc(r)}')">${ico('x', 13)}</span></div>`).join('') || '<span class="hint">Belum ada rombel.</span>'}
+        ${aSetState.rombel.map(r => `<div class="chip on"><span style="cursor:pointer" title="Kelola rombel" onclick="kelolaRombel('${escArg(r)}')">${esc(r)}</span><span style="cursor:pointer;display:inline-flex" title="Hapus" onclick="setDelItem('rombel','${escArg(r)}')">${ico('x', 13)}</span></div>`).join('') || '<span class="hint">Belum ada rombel.</span>'}
       </div>
       <div style="display:flex;gap:8px">
         <input id="set-add-rombel" class="input" placeholder="cth: 7C" style="flex:1"/>
@@ -1744,7 +1987,7 @@ function renderASet() {
       <div class="section-title">${ico('book',15)} Daftar Mata Pelajaran</div>
       <div class="hint" style="margin-bottom:8px">Perubahan langsung tersimpan otomatis.</div>
       <div class="kbc-wrap" style="margin-bottom:10px">
-        ${aSetState.mapel.map(m => `<div class="chip on">${esc(m)}<span style="cursor:pointer;display:inline-flex" title="Hapus" onclick="setDelItem('mapel','${esc(m)}')">${ico('x', 13)}</span></div>`).join('') || '<span class="hint">Belum ada mapel.</span>'}
+        ${aSetState.mapel.map(m => `<div class="chip on">${esc(m)}<span style="cursor:pointer;display:inline-flex" title="Hapus" onclick="setDelItem('mapel','${escArg(m)}')">${ico('x', 13)}</span></div>`).join('') || '<span class="hint">Belum ada mapel.</span>'}
       </div>
       <div style="display:flex;gap:8px">
         <input id="set-add-mapel" class="input" placeholder="Nama mapel baru" style="flex:1"/>
@@ -2051,6 +2294,7 @@ Object.assign(window, {
   aJurnalTgl, aJurnalGuru, exportJurnalBulan,
   exportPdfRiwayat, exportPdfJurnalGuru,
   rekapSet, exportRekap,
+  aRekapTab, bukaDetailNilai, tutupDetailNilai, exportRekapNilai,
   nilaiFilter, bukaNilai, setNilaiInput, normalNilai, tutupNilaiInput,
   simpanNilaiKolom, hapusNilai, salinKolom, exportNilai,
   setAddItem, setDelItem, simpanSekolah, simpanAdmin, setKktpPlaceholder,
