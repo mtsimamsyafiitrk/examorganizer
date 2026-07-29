@@ -82,9 +82,15 @@ async function jurnalByRange(start, end) {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
-// Daftar rombel = gabungan pengaturan + rombel yang muncul di data siswa.
+// Daftar rombel resmi — HANYA dari pengaturan (satu-satunya sumber kebenaran,
+// agar rombel yang dihapus admin benar-benar hilang dari dropdown).
 function rombelList() {
-  const s = new Set([...(sekolah.rombel || []), ...siswaList.map(x => x.rombel)]);
+  return [...new Set(sekolah.rombel || [])].filter(Boolean).sort(cmpRombel);
+}
+// Rombel untuk halaman data siswa & rekap: sertakan juga rombel lama yang
+// masih dipakai siswa, agar siswa "yatim" (rombelnya sudah dihapus) tetap terjangkau.
+function rombelListSiswa() {
+  const s = new Set([...rombelList(), ...siswaList.map(x => x.rombel)]);
   return [...s].filter(Boolean).sort(cmpRombel);
 }
 function siswaByRombel(r) {
@@ -671,7 +677,7 @@ function renderASiswa() {
       <div class="filter-row">
         <select class="input" onchange="aSiswaFilter(this.value)">
           <option value="">Semua rombel</option>
-          ${rombelList().map(r => `<option value="${esc(r)}" ${r === filter ? 'selected' : ''}>${esc(r)}</option>`).join('')}
+          ${rombelListSiswa().map(r => `<option value="${esc(r)}" ${r === filter ? 'selected' : ''}>${esc(r)}</option>`).join('')}
         </select>
         ${filter ? `<button class="btn-ghost" style="color:var(--rose2)" onclick="hapusSiswaRombel('${esc(filter)}')">🗑️ Hapus rombel ini</button>` : ''}
       </div>
@@ -699,7 +705,7 @@ function openModalSiswa(id) {
   document.getElementById('ms-nama').value = s?.nama || '';
   document.getElementById('ms-nisn').value = s?.nisn || '';
   const sel = document.getElementById('ms-rombel');
-  sel.innerHTML = rombelList().map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
+  sel.innerHTML = rombelListSiswa().map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
   if (s) sel.value = s.rombel;
   openModal('modal-siswa');
 }
@@ -895,7 +901,7 @@ function renderRekapPage(pageId, guruOnly) {
         <input class="input" type="month" value="${ym}" onchange="rekapSet('${pageId}','ym',this.value,${guruOnly})"/>
         <select class="input" onchange="rekapSet('${pageId}','rombel',this.value,${guruOnly})">
           <option value="">— pilih rombel —</option>
-          ${rombelList().map(r => `<option value="${esc(r)}" ${r === rombel ? 'selected' : ''}>${esc(r)}</option>`).join('')}
+          ${rombelListSiswa().map(r => `<option value="${esc(r)}" ${r === rombel ? 'selected' : ''}>${esc(r)}</option>`).join('')}
         </select>
         <select class="input" onchange="rekapSet('${pageId}','mapel',this.value,${guruOnly})">
           <option value="">Semua mapel</option>
@@ -977,23 +983,30 @@ async function exportRekap(pageId, guruOnly) {
 
 // ═══════════════════ ADMIN: PENGATURAN ═══════════════════
 function renderASet() {
-  if (!aSetState) aSetState = { rombel: [...(sekolah.rombel || [])], mapel: [...(sekolah.mapel || [])] };
+  // Daftar rombel/mapel selalu dari data tersimpan (perubahan dipersist langsung
+  // oleh setAddItem/setDelItem, tidak menunggu tombol Simpan).
+  aSetState = { rombel: [...(sekolah.rombel || [])], mapel: [...(sekolah.mapel || [])] };
+  // Jangan reset isian identitas yang sedang diedit saat halaman dirender ulang.
+  const curNama = document.getElementById('set-nama')?.value;
+  const curTp = document.getElementById('set-tp')?.value;
+  const curSmt = document.getElementById('set-smt')?.value || sekolah.semester;
   const el = document.getElementById('page-a-set');
   el.innerHTML = `
     <div class="card card-sage">
       <div class="section-title">🏫 Identitas Sekolah</div>
-      <div class="input-wrap"><label>Nama Sekolah/Madrasah</label><input id="set-nama" class="input" value="${esc(sekolah.nama)}"/></div>
+      <div class="input-wrap"><label>Nama Sekolah/Madrasah</label><input id="set-nama" class="input" value="${esc(curNama ?? sekolah.nama)}"/></div>
       <div class="grid2">
-        <div class="input-wrap"><label>Tahun Pelajaran</label><input id="set-tp" class="input" value="${esc(sekolah.tahunPelajaran)}" placeholder="2026/2027"/></div>
+        <div class="input-wrap"><label>Tahun Pelajaran</label><input id="set-tp" class="input" value="${esc(curTp ?? sekolah.tahunPelajaran)}" placeholder="2026/2027"/></div>
         <div class="input-wrap"><label>Semester</label>
           <select id="set-smt" class="input">
-            <option ${sekolah.semester === 'Ganjil' ? 'selected' : ''}>Ganjil</option>
-            <option ${sekolah.semester === 'Genap' ? 'selected' : ''}>Genap</option>
+            <option ${curSmt === 'Ganjil' ? 'selected' : ''}>Ganjil</option>
+            <option ${curSmt === 'Genap' ? 'selected' : ''}>Genap</option>
           </select></div>
       </div>
     </div>
     <div class="card">
       <div class="section-title">🏷️ Daftar Rombel</div>
+      <div class="hint" style="margin-bottom:8px">Perubahan langsung tersimpan otomatis. Menghapus rombel tidak menghapus data siswanya.</div>
       <div class="kbc-wrap" style="margin-bottom:10px">
         ${aSetState.rombel.map(r => `<div class="chip on">${esc(r)} <span style="cursor:pointer;font-weight:900" onclick="setDelItem('rombel','${esc(r)}')">✕</span></div>`).join('') || '<span class="hint">Belum ada rombel.</span>'}
       </div>
@@ -1004,6 +1017,7 @@ function renderASet() {
     </div>
     <div class="card">
       <div class="section-title">📚 Daftar Mata Pelajaran</div>
+      <div class="hint" style="margin-bottom:8px">Perubahan langsung tersimpan otomatis.</div>
       <div class="kbc-wrap" style="margin-bottom:10px">
         ${aSetState.mapel.map(m => `<div class="chip on">${esc(m)} <span style="cursor:pointer;font-weight:900" onclick="setDelItem('mapel','${esc(m)}')">✕</span></div>`).join('') || '<span class="hint">Belum ada mapel.</span>'}
       </div>
@@ -1012,7 +1026,7 @@ function renderASet() {
         <button class="btn btn-sage" onclick="setAddItem('mapel')">＋</button>
       </div>
     </div>
-    <button class="btn btn-sage" style="width:100%;padding:13px;margin-bottom:12px" onclick="simpanSekolah()">💾 Simpan Pengaturan</button>
+    <button class="btn btn-sage" style="width:100%;padding:13px;margin-bottom:12px" onclick="simpanSekolah()">💾 Simpan Identitas Sekolah</button>
     <div class="card">
       <div class="section-title">🔑 Akun Admin</div>
       <div class="input-wrap"><label>Username Admin</label><input id="adm-user" class="input" placeholder="admin"/></div>
@@ -1023,18 +1037,46 @@ function renderASet() {
   getAdminDoc().then(adm => { document.getElementById('adm-user').value = adm?.username || 'admin'; }).catch(() => {});
 }
 
-function setAddItem(kind) {
+async function setAddItem(kind) {
   const inp = document.getElementById('set-add-' + kind);
   let v = inp.value.trim();
   if (kind === 'rombel') v = v.toUpperCase();
   if (!v) return;
-  if (!aSetState[kind].includes(v)) aSetState[kind].push(v);
-  if (kind === 'rombel') aSetState.rombel.sort(cmpRombel);
-  renderASet();
+  if (aSetState[kind].includes(v)) { showToast('Sudah ada di daftar.', false); return; }
+  const list = [...aSetState[kind], v];
+  if (kind === 'rombel') list.sort(cmpRombel);
+  await persistDaftar(kind, list, `✅ ${kind === 'rombel' ? 'Rombel' : 'Mapel'} "${v}" ditambahkan.`);
   document.getElementById('set-add-' + kind).focus();
 }
+
 function setDelItem(kind, v) {
-  aSetState[kind] = aSetState[kind].filter(x => x !== v);
+  const list = aSetState[kind].filter(x => x !== v);
+  const doDelete = () =>
+    persistDaftar(kind, list, `✅ ${kind === 'rombel' ? 'Rombel' : 'Mapel'} "${v}" dihapus.`);
+  if (kind === 'rombel') {
+    const n = siswaByRombel(v).length;
+    if (n > 0) {
+      confirmAction('Hapus Rombel',
+        `Masih ada <b>${n} siswa</b> terdaftar di rombel <b>${esc(v)}</b>.<br>` +
+        `Rombel akan hilang dari pilihan jurnal, tetapi data siswanya <b>tidak ikut terhapus</b> ` +
+        `(masih bisa dilihat lewat filter di menu Siswa). Lanjutkan?`, doDelete);
+      return;
+    }
+  }
+  doDelete();
+}
+
+// Simpan daftar rombel/mapel langsung ke Firestore, lalu render ulang dari data tersimpan.
+async function persistDaftar(kind, list, okMsg) {
+  showLoading('Menyimpan...');
+  try {
+    await saveSekolahDoc({ [kind]: list });
+    showToast(okMsg);
+  } catch (e) {
+    console.error(e);
+    showToast('Gagal menyimpan perubahan. Periksa koneksi.', false);
+  }
+  hideLoading();
   renderASet();
 }
 
@@ -1047,7 +1089,6 @@ async function simpanSekolah() {
     await saveSekolahDoc({
       nama, tahunPelajaran: tp,
       semester: document.getElementById('set-smt').value,
-      rombel: aSetState.rombel, mapel: aSetState.mapel,
     });
     document.getElementById('a-header-sub').textContent =
       `${sekolah.nama} · TP ${sekolah.tahunPelajaran} · ${sekolah.semester}`;
