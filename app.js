@@ -29,6 +29,7 @@ import {
 } from "./js/constants.js";
 import { hashPw, uid, dk, esc, fmtTanggal, cmpRombel, cmpNama, hitungRekap } from "./js/utils.js";
 import { showLoading, hideLoading, showToast, showScreen, openModal, closeModal, togglePw } from "./js/ui-helpers.js";
+import { ico, initIcons } from "./js/icons.js";
 
 // ── STATE ──
 let loginRole = 'guru';
@@ -227,35 +228,35 @@ async function renderGHome() {
   const mapelku = (currentUser.mapel && currentUser.mapel.length) ? currentUser.mapel.join(', ') : 'Semua mapel';
   el.innerHTML = `
     <div class="card card-sage">
-      <div style="font-size:15px;font-weight:800">Assalamu'alaikum, ${esc(currentUser.nama)} 👋</div>
+      <div style="font-size:15px;font-weight:800">Assalamu'alaikum, ${esc(currentUser.nama)}</div>
       <div class="hint" style="margin-top:4px">${esc(fmtTanggal(dk()))} · ${esc(mapelku)}</div>
     </div>
     <div class="stat-grid">
       <div class="stat"><div class="num" style="color:var(--sage2)">${list.length}</div><div class="lbl">Jurnal hari ini</div></div>
       <div class="stat"><div class="num" style="color:var(--teal2)">${list.reduce((a, j) => a + (j.rekap?.H || 0), 0)}</div><div class="lbl">Siswa hadir tercatat</div></div>
     </div>
-    <button class="btn btn-sage" style="width:100%;padding:14px;font-size:14px;margin-bottom:12px" onclick="gNav('jurnal')">📝 Isi Jurnal Mengajar</button>
+    <button class="btn btn-sage" style="width:100%;padding:14px;font-size:14px;margin-bottom:12px" onclick="gNav('jurnal')">${ico('pen',15)} Isi Jurnal Mengajar</button>
     <div class="card">
-      <div class="section-title">📖 Jurnal Hari Ini</div>
+      <div class="section-title">${ico('book-open',15)} Jurnal Hari Ini</div>
       ${list.length ? list.map(j => jurnalItemHTML(j, false)).join('') : `<div class="empty">Belum ada jurnal hari ini.</div>`}
     </div>`;
 }
 
 function jurnalItemHTML(j, showGuru) {
   const r = j.rekap || {};
-  const kbcIcons = (j.kbc || []).map(k => KBC_VALUES.find(v => v.key === k)?.icon || '').join(' ');
+  const kbcBadge = (j.kbc || []).length ? ` · ${ico('heart', 11)} ${(j.kbc || []).length}` : '';
   return `
   <div class="item" style="cursor:pointer" onclick="lihatJurnal('${j.id}')">
     <div class="avatar">${esc(j.rombel || '?')}</div>
     <div class="grow">
       <div class="t1">${esc(j.mapel)} — ${esc(j.materi)}</div>
-      <div class="t2">${showGuru ? esc(j.guruNama) + ' · ' : ''}${esc(fmtTanggal(j.tanggal))}${j.jamKe ? ' · Jam ke-' + esc(j.jamKe) : ''} ${kbcIcons}</div>
+      <div class="t2">${showGuru ? esc(j.guruNama) + ' · ' : ''}${esc(fmtTanggal(j.tanggal))}${j.jamKe ? ' · Jam ke-' + esc(j.jamKe) : ''}${kbcBadge}</div>
       <div class="t2">
         <span style="color:#5a9b86">H:${r.H ?? 0}</span> · <span style="color:#a8874d">S:${r.S ?? 0}</span> ·
         <span style="color:#5a8aaa">I:${r.I ?? 0}</span> · <span style="color:#a86870">A:${r.A ?? 0}</span>
       </div>
     </div>
-    <span style="color:var(--muted);font-weight:900">›</span>
+    <span style="color:var(--muted)">${ico('chevron',16)}</span>
   </div>`;
 }
 
@@ -278,7 +279,7 @@ function initJurnalForm() {
 
 function renderKbcChips() {
   document.getElementById('j-kbc').innerHTML = KBC_VALUES.map(v =>
-    `<div class="chip ${kbcState.has(v.key) ? 'on' : ''}" onclick="toggleKbc('${v.key}',this)">${v.icon} ${v.label}</div>`
+    `<div class="chip ${kbcState.has(v.key) ? 'on' : ''}" onclick="toggleKbc('${v.key}',this)">${v.label}</div>`
   ).join('');
 }
 function toggleKbc(key, el) {
@@ -354,7 +355,7 @@ async function simpanJurnal() {
     }
     await setDoc(doc(fs, 'jm_jurnal', id), data);
     hideLoading();
-    showToast(editJurnalId ? '✅ Jurnal berhasil diperbarui!' : '✅ Jurnal berhasil disimpan!');
+    showToast(editJurnalId ? 'Jurnal berhasil diperbarui!' : 'Jurnal berhasil disimpan!');
     resetJurnalForm();
     gNav('riwayat');
   } catch (e) { console.error(e); hideLoading(); showToast('Gagal menyimpan jurnal.', false); }
@@ -362,7 +363,7 @@ async function simpanJurnal() {
 
 function resetJurnalForm() {
   editJurnalId = null;
-  document.getElementById('g-jurnal-form-title').textContent = '📝 Isi Jurnal Mengajar';
+  document.getElementById('g-jurnal-form-title').innerHTML = ico('pen') + ' Isi Jurnal Mengajar';
   document.getElementById('j-batal').style.display = 'none';
   document.getElementById('j-tanggal').value = dk();
   document.getElementById('j-jamke').value = '';
@@ -383,7 +384,7 @@ async function editJurnal(id) {
     if (!d.exists()) { hideLoading(); showToast('Jurnal tidak ditemukan.', false); return; }
     const j = d.data();
     editJurnalId = id;
-    document.getElementById('g-jurnal-form-title').textContent = '✏️ Edit Jurnal Mengajar';
+    document.getElementById('g-jurnal-form-title').innerHTML = ico('pencil') + ' Edit Jurnal Mengajar';
     document.getElementById('j-batal').style.display = 'block';
     document.getElementById('j-tanggal').value = j.tanggal;
     document.getElementById('j-jamke').value = j.jamKe || '';
@@ -411,7 +412,7 @@ async function renderGRiwayat() {
   const bulan = el.dataset.bulan || dk().slice(0, 7);
   el.innerHTML = `
     <div class="card">
-      <div class="section-title">📚 Riwayat Jurnal</div>
+      <div class="section-title">${ico('book',15)} Riwayat Jurnal</div>
       <div class="filter-row">
         <input id="riw-bulan" class="input" type="month" value="${bulan}" onchange="gRiwayatBulan(this.value)"/>
       </div>
@@ -442,7 +443,7 @@ async function lihatJurnal(id) {
     if (!d.exists()) { hideLoading(); showToast('Jurnal tidak ditemukan.', false); return; }
     const j = d.data();
     const kbcHTML = (j.kbc || []).length
-      ? (j.kbc || []).map(k => { const v = KBC_VALUES.find(x => x.key === k); return v ? `<span class="badge" style="background:var(--sage3);color:var(--sage2);margin:2px 3px 0 0">${v.icon} ${v.label}</span>` : ''; }).join('')
+      ? (j.kbc || []).map(k => { const v = KBC_VALUES.find(x => x.key === k); return v ? `<span class="badge" style="background:var(--sage3);color:var(--sage2);margin:2px 3px 0 0">${v.label}</span>` : ''; }).join('')
       : '<span class="hint">—</span>';
     const siswa = siswaByRombel(j.rombel);
     const namaSiswa = Object.fromEntries(siswaList.map(s => [s.id, s.nama]));
@@ -474,8 +475,8 @@ async function lihatJurnal(id) {
           </div>`; }).join('')}
       </div>
       <div style="display:flex;gap:8px;margin-top:14px">
-        ${canEdit ? `<button class="btn btn-teal" style="flex:1" onclick="editJurnal('${id}')">✏️ Edit</button>` : ''}
-        ${canDel ? `<button class="btn btn-rose" style="flex:1" onclick="hapusJurnal('${id}')">🗑️ Hapus</button>` : ''}
+        ${canEdit ? `<button class="btn btn-teal" style="flex:1" onclick="editJurnal('${id}')">${ico('pencil',14)} Edit</button>` : ''}
+        ${canDel ? `<button class="btn btn-rose" style="flex:1" onclick="hapusJurnal('${id}')">${ico('trash',14)} Hapus</button>` : ''}
       </div>`;
     openModal('modal-jurnal');
   } catch (e) { console.error(e); showToast('Gagal memuat detail.', false); }
@@ -488,7 +489,7 @@ function hapusJurnal(id) {
     try {
       await deleteDoc(doc(fs, 'jm_jurnal', id));
       closeModal('modal-jurnal');
-      showToast('✅ Jurnal dihapus.');
+      showToast('Jurnal dihapus.');
       if (currentUser.role === 'guru') renderGRiwayat(); else renderAJurnal();
     } catch (e) { showToast('Gagal menghapus.', false); }
     hideLoading();
@@ -502,7 +503,7 @@ function renderGAkun() {
   const el = document.getElementById('page-g-akun');
   el.innerHTML = `
     <div class="card card-sage">
-      <div class="section-title">👤 Akun Saya</div>
+      <div class="section-title">${ico('user',15)} Akun Saya</div>
       <div class="hint" style="font-size:13px;line-height:1.7">
         <b>${esc(currentUser.nama)}</b><br>
         Username: <b>${esc(currentUser.username)}</b><br>
@@ -511,10 +512,10 @@ function renderGAkun() {
       </div>
     </div>
     <div class="card">
-      <div class="section-title">🔑 Ganti Password</div>
-      <div class="input-wrap"><label>Password Lama</label><input id="pw-old" class="input" type="password"/><button class="eye" onclick="togglePw('pw-old',this)">👁️</button></div>
-      <div class="input-wrap"><label>Password Baru</label><input id="pw-new" class="input" type="password"/><button class="eye" onclick="togglePw('pw-new',this)">👁️</button></div>
-      <div class="input-wrap"><label>Ulangi Password Baru</label><input id="pw-new2" class="input" type="password"/><button class="eye" onclick="togglePw('pw-new2',this)">👁️</button></div>
+      <div class="section-title">${ico('key',15)} Ganti Password</div>
+      <div class="input-wrap"><label>Password Lama</label><input id="pw-old" class="input" type="password"/><button class="eye" onclick="togglePw('pw-old',this)">${ico('eye',16)}</button></div>
+      <div class="input-wrap"><label>Password Baru</label><input id="pw-new" class="input" type="password"/><button class="eye" onclick="togglePw('pw-new',this)">${ico('eye',16)}</button></div>
+      <div class="input-wrap"><label>Ulangi Password Baru</label><input id="pw-new2" class="input" type="password"/><button class="eye" onclick="togglePw('pw-new2',this)">${ico('eye',16)}</button></div>
       <button class="btn btn-sage" style="width:100%" onclick="gantiPwGuru()">Simpan Password Baru</button>
     </div>`;
 }
@@ -532,7 +533,7 @@ async function gantiPwGuru() {
     const pwHash = await hashPw(newPw);
     await setDoc(doc(fs, 'jm_guru', currentUser.id), { ...stripId(currentUser), pwHash });
     currentUser.pwHash = pwHash;
-    showToast('✅ Password berhasil diganti!');
+    showToast('Password berhasil diganti!');
     renderGAkun();
   } catch (e) { showToast('Gagal menyimpan.', false); }
   hideLoading();
@@ -552,13 +553,13 @@ async function renderAHome() {
       <div class="hint" style="margin-top:3px">${esc(fmtTanggal(dk()))} · TP ${esc(sekolah.tahunPelajaran)} · Semester ${esc(sekolah.semester)}</div>
     </div>
     <div class="stat-grid">
-      <div class="stat"><div class="num" style="color:var(--sage2)">${guruList.length}</div><div class="lbl">👨‍🏫 Guru</div></div>
-      <div class="stat"><div class="num" style="color:var(--teal2)">${siswaList.length}</div><div class="lbl">🧑‍🎓 Siswa</div></div>
-      <div class="stat"><div class="num" style="color:var(--lavender2)">${rombelList().length}</div><div class="lbl">🏫 Rombel</div></div>
-      <div class="stat"><div class="num" style="color:var(--amber2)">${today.length}</div><div class="lbl">📖 Jurnal hari ini</div></div>
+      <div class="stat"><div class="num" style="color:var(--sage2)">${guruList.length}</div><div class="lbl">Guru</div></div>
+      <div class="stat"><div class="num" style="color:var(--teal2)">${siswaList.length}</div><div class="lbl">Siswa</div></div>
+      <div class="stat"><div class="num" style="color:var(--lavender2)">${rombelList().length}</div><div class="lbl">Rombel</div></div>
+      <div class="stat"><div class="num" style="color:var(--amber2)">${today.length}</div><div class="lbl">Jurnal hari ini</div></div>
     </div>
     <div class="card">
-      <div class="section-title">📖 Jurnal Masuk Hari Ini</div>
+      <div class="section-title">${ico('book-open',15)} Jurnal Masuk Hari Ini</div>
       ${today.length ? today.map(j => jurnalItemHTML(j, true)).join('') : `<div class="empty">Belum ada jurnal masuk hari ini.</div>`}
     </div>`;
 }
@@ -569,8 +570,8 @@ function renderAGuru() {
   el.innerHTML = `
     <div class="card">
       <div class="section-title" style="justify-content:space-between">
-        <span>👨‍🏫 Akun Guru <span class="badge-mini">${guruList.length}</span></span>
-        <button class="btn btn-sage" onclick="openModalGuru()">＋ Tambah</button>
+        <span>${ico('users',15)} Akun Guru <span class="badge-mini">${guruList.length}</span></span>
+        <button class="btn btn-sage" onclick="openModalGuru()">${ico('plus',14)} Tambah</button>
       </div>
       <div class="hint" style="margin-bottom:6px">Password awal akun baru: <b>${GURU_DEFAULT_PW}</b> — minta guru menggantinya di menu Akun.</div>
       ${guruList.length ? guruList.map(g => `
@@ -580,10 +581,10 @@ function renderAGuru() {
             <div class="t1">${esc(g.nama)}</div>
             <div class="t2">@${esc(g.username)}${g.nip ? ' · ' + esc(g.nip) : ''}<br>${esc((g.mapel || []).join(', ') || 'Belum ada mapel')}</div>
           </div>
-          <button class="btn-icon" title="Edit" onclick="openModalGuru('${g.id}')">✏️</button>
-          <button class="btn-icon" title="Reset password" onclick="resetPwGuru('${g.id}')">🔑</button>
-          <button class="btn-icon" title="Hapus" onclick="hapusGuru('${g.id}')">🗑️</button>
-        </div>`).join('') : `<div class="empty">Belum ada akun guru. Klik ＋ Tambah.</div>`}
+          <button class="btn-icon" title="Edit" onclick="openModalGuru('${g.id}')">${ico('pencil',16)}</button>
+          <button class="btn-icon" title="Reset password" onclick="resetPwGuru('${g.id}')">${ico('key',16)}</button>
+          <button class="btn-icon" title="Hapus" onclick="hapusGuru('${g.id}')">${ico('trash',16)}</button>
+        </div>`).join('') : `<div class="empty">Belum ada akun guru. Klik tombol Tambah.</div>`}
     </div>`;
 }
 
@@ -625,7 +626,7 @@ async function simpanGuru() {
     await setDoc(doc(fs, 'jm_guru', id), { nama, nip, username, pwHash, mapel: [...mgMapelState] });
     await loadGuru();
     closeModal('modal-guru');
-    showToast(old ? '✅ Data guru diperbarui.' : `✅ Akun guru dibuat (password: ${GURU_DEFAULT_PW}).`);
+    showToast(old ? 'Data guru diperbarui.' : `Akun guru dibuat (password: ${GURU_DEFAULT_PW}).`);
     renderAGuru();
   } catch (e) { console.error(e); showToast('Gagal menyimpan.', false); }
   hideLoading();
@@ -640,7 +641,7 @@ function resetPwGuru(id) {
       const { id: _, ...data } = g;
       await setDoc(doc(fs, 'jm_guru', id), { ...data, pwHash });
       await loadGuru();
-      showToast('✅ Password direset ke ' + GURU_DEFAULT_PW);
+      showToast('Password direset ke ' + GURU_DEFAULT_PW);
     } catch (e) { showToast('Gagal mereset.', false); }
     hideLoading();
   });
@@ -653,7 +654,7 @@ function hapusGuru(id) {
     try {
       await deleteDoc(doc(fs, 'jm_guru', id));
       await loadGuru();
-      showToast('✅ Akun guru dihapus.');
+      showToast('Akun guru dihapus.');
       renderAGuru();
     } catch (e) { showToast('Gagal menghapus.', false); }
     hideLoading();
@@ -668,10 +669,10 @@ function renderASiswa() {
   el.innerHTML = `
     <div class="card">
       <div class="section-title" style="justify-content:space-between">
-        <span>🧑‍🎓 Data Siswa <span class="badge-mini">${list.length}${filter ? ' / ' + siswaList.length : ''}</span></span>
+        <span>${ico('grad',15)} Data Siswa <span class="badge-mini">${list.length}${filter ? ' / ' + siswaList.length : ''}</span></span>
         <span style="display:flex;gap:6px">
-          <button class="btn-ghost" onclick="openModalUpload()">📤 Upload</button>
-          <button class="btn btn-sage" onclick="openModalSiswa()">＋ Tambah</button>
+          <button class="btn-ghost" onclick="openModalUpload()">${ico('upload',13)} Upload</button>
+          <button class="btn btn-sage" onclick="openModalSiswa()">${ico('plus',14)} Tambah</button>
         </span>
       </div>
       <div class="filter-row">
@@ -679,7 +680,7 @@ function renderASiswa() {
           <option value="">Semua rombel</option>
           ${rombelListSiswa().map(r => `<option value="${esc(r)}" ${r === filter ? 'selected' : ''}>${esc(r)}</option>`).join('')}
         </select>
-        ${filter ? `<button class="btn-ghost" style="color:var(--rose2)" onclick="hapusSiswaRombel('${esc(filter)}')">🗑️ Hapus rombel ini</button>` : ''}
+        ${filter ? `<button class="btn-ghost" style="color:var(--rose2)" onclick="hapusSiswaRombel('${esc(filter)}')">${ico('trash',13)} Hapus rombel ini</button>` : ''}
       </div>
       ${list.length ? list.map(s => `
         <div class="item">
@@ -688,9 +689,9 @@ function renderASiswa() {
             <div class="t1">${esc(s.nama)}</div>
             <div class="t2">NISN ${esc(s.nisn || '-')}</div>
           </div>
-          <button class="btn-icon" onclick="openModalSiswa('${s.id}')">✏️</button>
-          <button class="btn-icon" onclick="hapusSiswa('${s.id}')">🗑️</button>
-        </div>`).join('') : `<div class="empty">Belum ada data siswa.<br>Gunakan tombol 📤 Upload untuk impor dari Excel.</div>`}
+          <button class="btn-icon" onclick="openModalSiswa('${s.id}')">${ico('pencil',16)}</button>
+          <button class="btn-icon" onclick="hapusSiswa('${s.id}')">${ico('trash',16)}</button>
+        </div>`).join('') : `<div class="empty">Belum ada data siswa.<br>Gunakan tombol Upload untuk impor dari Excel.</div>`}
     </div>`;
 }
 function aSiswaFilter(v) {
@@ -721,7 +722,7 @@ async function simpanSiswa() {
     await setDoc(doc(fs, 'jm_siswa', id), { nama, rombel, nisn });
     await loadSiswa();
     closeModal('modal-siswa');
-    showToast('✅ Data siswa disimpan.');
+    showToast('Data siswa disimpan.');
     renderASiswa();
   } catch (e) { showToast('Gagal menyimpan.', false); }
   hideLoading();
@@ -734,7 +735,7 @@ function hapusSiswa(id) {
     try {
       await deleteDoc(doc(fs, 'jm_siswa', id));
       await loadSiswa();
-      showToast('✅ Siswa dihapus.');
+      showToast('Siswa dihapus.');
       renderASiswa();
     } catch (e) { showToast('Gagal menghapus.', false); }
     hideLoading();
@@ -749,7 +750,7 @@ function hapusSiswaRombel(rombel) {
       for (const s of siswaByRombel(rombel)) await deleteDoc(doc(fs, 'jm_siswa', s.id));
       await loadSiswa();
       document.getElementById('page-a-siswa').dataset.rombel = '';
-      showToast(`✅ ${n} siswa rombel ${rombel} dihapus.`);
+      showToast(`${n} siswa rombel ${rombel} dihapus.`);
       renderASiswa();
     } catch (e) { showToast('Gagal menghapus.', false); }
     hideLoading();
@@ -815,7 +816,7 @@ async function prosesUploadSiswa() {
     if (newRombel.length !== (sekolah.rombel || []).length) await saveSekolahDoc({ rombel: newRombel });
     await loadSiswa();
     closeModal('modal-upload');
-    showToast(`✅ Upload selesai: ${baru} siswa baru, ${update} diperbarui.`);
+    showToast(`Upload selesai: ${baru} siswa baru, ${update} diperbarui.`);
     renderASiswa();
   } catch (e) { console.error(e); showToast('Gagal membaca file. Pastikan format .xlsx.', false); }
   hideLoading();
@@ -829,8 +830,8 @@ async function renderAJurnal() {
   el.innerHTML = `
     <div class="card">
       <div class="section-title" style="justify-content:space-between">
-        <span>📖 Monitor Jurnal</span>
-        <button class="btn-ghost" onclick="exportJurnalBulan()">⬇️ Ekspor bulan</button>
+        <span>${ico('clipboard',15)} Monitor Jurnal</span>
+        <button class="btn-ghost" onclick="exportJurnalBulan()">${ico('download',13)} Ekspor bulan</button>
       </div>
       <div class="filter-row">
         <input class="input" type="date" value="${tgl}" onchange="aJurnalTgl(this.value)"/>
@@ -894,8 +895,8 @@ function renderRekapPage(pageId, guruOnly) {
   el.innerHTML = `
     <div class="card">
       <div class="section-title" style="justify-content:space-between">
-        <span>📊 Rekap Absensi Siswa</span>
-        <button class="btn-ghost" onclick="exportRekap('${pageId}',${guruOnly})">⬇️ Ekspor</button>
+        <span>${ico('chart',15)} Rekap Absensi Siswa</span>
+        <button class="btn-ghost" onclick="exportRekap('${pageId}',${guruOnly})">${ico('download',13)} Ekspor</button>
       </div>
       <div class="filter-row">
         <input class="input" type="month" value="${ym}" onchange="rekapSet('${pageId}','ym',this.value,${guruOnly})"/>
@@ -976,7 +977,7 @@ async function exportRekap(pageId, guruOnly) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, `Rekap ${rombel}`);
     xlsxDownload(wb, `rekap_absensi_${rombel}_${ym}${mapel ? '_' + mapel.replace(/\W+/g, '') : ''}.xlsx`);
-    showToast(`✅ Rekap ${pertemuan} pertemuan diekspor.`);
+    showToast(`Rekap ${pertemuan} pertemuan diekspor.`);
   } catch (e) { console.error(e); showToast('Gagal ekspor.', false); }
   hideLoading();
 }
@@ -993,7 +994,7 @@ function renderASet() {
   const el = document.getElementById('page-a-set');
   el.innerHTML = `
     <div class="card card-sage">
-      <div class="section-title">🏫 Identitas Sekolah</div>
+      <div class="section-title">${ico('building',15)} Identitas Sekolah</div>
       <div class="input-wrap"><label>Nama Sekolah/Madrasah</label><input id="set-nama" class="input" value="${esc(curNama ?? sekolah.nama)}"/></div>
       <div class="grid2">
         <div class="input-wrap"><label>Tahun Pelajaran</label><input id="set-tp" class="input" value="${esc(curTp ?? sekolah.tahunPelajaran)}" placeholder="2026/2027"/></div>
@@ -1005,33 +1006,33 @@ function renderASet() {
       </div>
     </div>
     <div class="card">
-      <div class="section-title">🏷️ Daftar Rombel</div>
-      <div class="hint" style="margin-bottom:8px">Perubahan langsung tersimpan otomatis. Menghapus rombel tidak menghapus data siswanya.</div>
+      <div class="section-title">${ico('tag',15)} Daftar Rombel</div>
+      <div class="hint" style="margin-bottom:8px">Klik nama rombel untuk mengelola: ganti nama, atur anggota, dan migrasi siswa ke rombel setingkat. Perubahan langsung tersimpan otomatis; menghapus rombel tidak menghapus data siswanya.</div>
       <div class="kbc-wrap" style="margin-bottom:10px">
-        ${aSetState.rombel.map(r => `<div class="chip on">${esc(r)} <span style="cursor:pointer;font-weight:900" onclick="setDelItem('rombel','${esc(r)}')">✕</span></div>`).join('') || '<span class="hint">Belum ada rombel.</span>'}
+        ${aSetState.rombel.map(r => `<div class="chip on"><span style="cursor:pointer" title="Kelola rombel" onclick="kelolaRombel('${esc(r)}')">${esc(r)}</span><span style="cursor:pointer;display:inline-flex" title="Hapus" onclick="setDelItem('rombel','${esc(r)}')">${ico('x', 13)}</span></div>`).join('') || '<span class="hint">Belum ada rombel.</span>'}
       </div>
       <div style="display:flex;gap:8px">
         <input id="set-add-rombel" class="input" placeholder="cth: 7C" style="flex:1"/>
-        <button class="btn btn-sage" onclick="setAddItem('rombel')">＋</button>
+        <button class="btn btn-sage" onclick="setAddItem('rombel')">${ico('plus',16)}</button>
       </div>
     </div>
     <div class="card">
-      <div class="section-title">📚 Daftar Mata Pelajaran</div>
+      <div class="section-title">${ico('book',15)} Daftar Mata Pelajaran</div>
       <div class="hint" style="margin-bottom:8px">Perubahan langsung tersimpan otomatis.</div>
       <div class="kbc-wrap" style="margin-bottom:10px">
-        ${aSetState.mapel.map(m => `<div class="chip on">${esc(m)} <span style="cursor:pointer;font-weight:900" onclick="setDelItem('mapel','${esc(m)}')">✕</span></div>`).join('') || '<span class="hint">Belum ada mapel.</span>'}
+        ${aSetState.mapel.map(m => `<div class="chip on">${esc(m)}<span style="cursor:pointer;display:inline-flex" title="Hapus" onclick="setDelItem('mapel','${esc(m)}')">${ico('x', 13)}</span></div>`).join('') || '<span class="hint">Belum ada mapel.</span>'}
       </div>
       <div style="display:flex;gap:8px">
         <input id="set-add-mapel" class="input" placeholder="Nama mapel baru" style="flex:1"/>
-        <button class="btn btn-sage" onclick="setAddItem('mapel')">＋</button>
+        <button class="btn btn-sage" onclick="setAddItem('mapel')">${ico('plus',16)}</button>
       </div>
     </div>
-    <button class="btn btn-sage" style="width:100%;padding:13px;margin-bottom:12px" onclick="simpanSekolah()">💾 Simpan Identitas Sekolah</button>
+    <button class="btn btn-sage" style="width:100%;padding:13px;margin-bottom:12px" onclick="simpanSekolah()">${ico('save',14)} Simpan Identitas Sekolah</button>
     <div class="card">
-      <div class="section-title">🔑 Akun Admin</div>
+      <div class="section-title">${ico('key',15)} Akun Admin</div>
       <div class="input-wrap"><label>Username Admin</label><input id="adm-user" class="input" placeholder="admin"/></div>
-      <div class="input-wrap"><label>Password Baru</label><input id="adm-pw" class="input" type="password"/><button class="eye" onclick="togglePw('adm-pw',this)">👁️</button></div>
-      <div class="input-wrap"><label>Ulangi Password Baru</label><input id="adm-pw2" class="input" type="password"/><button class="eye" onclick="togglePw('adm-pw2',this)">👁️</button></div>
+      <div class="input-wrap"><label>Password Baru</label><input id="adm-pw" class="input" type="password"/><button class="eye" onclick="togglePw('adm-pw',this)">${ico('eye',16)}</button></div>
+      <div class="input-wrap"><label>Ulangi Password Baru</label><input id="adm-pw2" class="input" type="password"/><button class="eye" onclick="togglePw('adm-pw2',this)">${ico('eye',16)}</button></div>
       <button class="btn btn-teal" style="width:100%" onclick="simpanAdmin()">Simpan Akun Admin</button>
     </div>`;
   getAdminDoc().then(adm => { document.getElementById('adm-user').value = adm?.username || 'admin'; }).catch(() => {});
@@ -1045,14 +1046,14 @@ async function setAddItem(kind) {
   if (aSetState[kind].includes(v)) { showToast('Sudah ada di daftar.', false); return; }
   const list = [...aSetState[kind], v];
   if (kind === 'rombel') list.sort(cmpRombel);
-  await persistDaftar(kind, list, `✅ ${kind === 'rombel' ? 'Rombel' : 'Mapel'} "${v}" ditambahkan.`);
+  await persistDaftar(kind, list, `${kind === 'rombel' ? 'Rombel' : 'Mapel'} "${v}" ditambahkan.`);
   document.getElementById('set-add-' + kind).focus();
 }
 
 function setDelItem(kind, v) {
   const list = aSetState[kind].filter(x => x !== v);
   const doDelete = () =>
-    persistDaftar(kind, list, `✅ ${kind === 'rombel' ? 'Rombel' : 'Mapel'} "${v}" dihapus.`);
+    persistDaftar(kind, list, `${kind === 'rombel' ? 'Rombel' : 'Mapel'} "${v}" dihapus.`);
   if (kind === 'rombel') {
     const n = siswaByRombel(v).length;
     if (n > 0) {
@@ -1092,7 +1093,7 @@ async function simpanSekolah() {
     });
     document.getElementById('a-header-sub').textContent =
       `${sekolah.nama} · TP ${sekolah.tahunPelajaran} · ${sekolah.semester}`;
-    showToast('✅ Pengaturan disimpan.');
+    showToast('Pengaturan disimpan.');
   } catch (e) { showToast('Gagal menyimpan.', false); }
   hideLoading();
 }
@@ -1108,11 +1109,139 @@ async function simpanAdmin() {
   showLoading('Menyimpan...');
   try {
     await setDoc(doc(fs, 'jm_config', 'admin'), { username, pwHash: await hashPw(pw) });
-    showToast('✅ Akun admin diperbarui.');
+    showToast('Akun admin diperbarui.');
     document.getElementById('adm-pw').value = '';
     document.getElementById('adm-pw2').value = '';
   } catch (e) { showToast('Gagal menyimpan.', false); }
   hideLoading();
+}
+
+// ═══════════════════ ADMIN: KELOLA ROMBEL ═══════════════════
+// Klik nama rombel di Setelan → modal: ganti nama, atur anggota,
+// migrasi siswa ke rombel setingkat, atau tarik siswa dari rombel lain.
+let mrRombel = null;
+let mrSel = new Set();     // anggota terpilih (untuk dipindahkan)
+let mrAddSel = new Set();  // calon dari rombel lain (untuk dimasukkan)
+let mrAddSrc = '';         // rombel sumber pada bagian "masukkan siswa"
+
+function tingkatOf(r) { const n = parseInt(r); return isNaN(n) ? null : n; }
+
+function kelolaRombel(r) {
+  mrRombel = r; mrSel = new Set(); mrAddSel = new Set(); mrAddSrc = '';
+  renderModalRombel();
+  openModal('modal-rombel');
+}
+
+function renderModalRombel() {
+  const r = mrRombel;
+  document.getElementById('mr-title').innerHTML = `${ico('tag', 17)} Kelola Rombel ${esc(r)}`;
+  const anggota = siswaByRombel(r);
+  const tk = tingkatOf(r);
+  const target = rombelList().filter(x => x !== r && tingkatOf(x) === tk);
+  const sumberList = rombelListSiswa().filter(x => x !== r);
+  const calon = mrAddSrc ? siswaByRombel(mrAddSrc) : [];
+  const allChecked = anggota.length > 0 && anggota.every(s => mrSel.has(s.id));
+  const rowSiswa = (s, sel, fn) => `
+    <label style="display:flex;align-items:center;gap:9px;padding:7px 0;border-bottom:1px solid var(--bg2);cursor:pointer;font-size:13px;font-weight:700">
+      <input type="checkbox" ${sel.has(s.id) ? 'checked' : ''} onchange="${fn}('${s.id}',this.checked)"/>
+      <span style="flex:1">${esc(s.nama)}</span><span class="hint">${esc(s.nisn || '')}</span>
+    </label>`;
+  document.getElementById('mr-body').innerHTML = `
+    <div class="input-wrap"><label>Ganti Nama Rombel</label>
+      <div style="display:flex;gap:8px">
+        <input id="mr-rename" class="input" value="${esc(r)}" style="flex:1"/>
+        <button class="btn btn-teal" onclick="renameRombel()">Simpan</button>
+      </div>
+      <div class="hint" style="margin-top:5px">Rombel semua siswanya ikut diperbarui. Jurnal lama tetap memakai nama lama.</div>
+    </div>
+    <div class="section-title" style="margin-top:4px">${ico('users', 15)} Anggota <span class="badge-mini">${anggota.length} siswa</span></div>
+    ${anggota.length ? `
+      <label class="hint" style="display:flex;align-items:center;gap:8px;margin-bottom:5px;cursor:pointer">
+        <input type="checkbox" ${allChecked ? 'checked' : ''} onchange="mrPilihSemua(this.checked)"/> Pilih semua
+      </label>
+      <div style="max-height:190px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;padding:2px 12px;margin-bottom:10px">
+        ${anggota.map(s => rowSiswa(s, mrSel, 'mrToggle')).join('')}
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:16px">
+        <select id="mr-target" class="input" style="flex:1;font-size:14px;padding:9px 12px">
+          <option value="">— rombel tujuan (setingkat) —</option>
+          ${target.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join('')}
+        </select>
+        <button class="btn btn-sage" onclick="migrasiSiswa()">${ico('repeat', 13)} Pindahkan</button>
+      </div>`
+    : `<div class="empty" style="padding:14px">Belum ada siswa di rombel ini.</div>`}
+    <div class="section-title">${ico('plus', 15)} Masukkan Siswa dari Rombel Lain</div>
+    <select class="input" style="font-size:14px;padding:9px 12px;margin-bottom:8px" onchange="mrSetSumber(this.value)">
+      <option value="">— pilih rombel sumber —</option>
+      ${sumberList.map(x => `<option value="${esc(x)}" ${x === mrAddSrc ? 'selected' : ''}>${esc(x)}</option>`).join('')}
+    </select>
+    ${mrAddSrc ? (calon.length ? `
+      <div style="max-height:160px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;padding:2px 12px;margin-bottom:10px">
+        ${calon.map(s => rowSiswa(s, mrAddSel, 'mrAddToggle')).join('')}
+      </div>
+      <button class="btn btn-teal" style="width:100%" onclick="masukkanSiswa()">${ico('check', 14)} Masukkan ke ${esc(r)}</button>`
+    : `<div class="empty" style="padding:12px">Tidak ada siswa di rombel sumber.</div>`) : ''}`;
+}
+
+function mrToggle(id, on) { on ? mrSel.add(id) : mrSel.delete(id); }
+function mrAddToggle(id, on) { on ? mrAddSel.add(id) : mrAddSel.delete(id); }
+function mrPilihSemua(on) {
+  mrSel = on ? new Set(siswaByRombel(mrRombel).map(s => s.id)) : new Set();
+  renderModalRombel();
+}
+function mrSetSumber(v) { mrAddSrc = v; mrAddSel = new Set(); renderModalRombel(); }
+
+async function renameRombel() {
+  const lama = mrRombel;
+  const baru = document.getElementById('mr-rename').value.trim().toUpperCase();
+  if (!baru) { showToast('Nama rombel tidak boleh kosong.', false); return; }
+  if (baru === lama) { showToast('Nama tidak berubah.', false); return; }
+  if (rombelList().includes(baru)) { showToast(`Rombel ${baru} sudah ada.`, false); return; }
+  const n = siswaByRombel(lama).length;
+  confirmAction('Ganti Nama Rombel',
+    `Rombel <b>${esc(lama)}</b> akan diganti menjadi <b>${esc(baru)}</b>. Rombel pada <b>${n} siswa</b> ikut diperbarui. Lanjutkan?`,
+    async () => {
+      showLoading('Mengganti nama...');
+      try {
+        for (const s of siswaByRombel(lama))
+          await setDoc(doc(fs, 'jm_siswa', s.id), { nama: s.nama, rombel: baru, nisn: s.nisn || '' });
+        const list = rombelList().map(x => x === lama ? baru : x).sort(cmpRombel);
+        await saveSekolahDoc({ rombel: list });
+        await loadSiswa();
+        mrRombel = baru; mrSel = new Set(); mrAddSel = new Set();
+        showToast(`Nama rombel diganti menjadi ${baru}.`);
+        renderModalRombel(); renderASet();
+      } catch (e) { console.error(e); showToast('Gagal mengganti nama.', false); }
+      hideLoading();
+    });
+}
+
+async function pindahkanSiswaIds(ids, target, okMsg) {
+  showLoading('Menyimpan...');
+  try {
+    for (const id of ids) {
+      const s = siswaList.find(x => x.id === id); if (!s) continue;
+      await setDoc(doc(fs, 'jm_siswa', id), { nama: s.nama, rombel: target, nisn: s.nisn || '' });
+    }
+    await loadSiswa();
+    showToast(okMsg);
+  } catch (e) { console.error(e); showToast('Gagal menyimpan perubahan.', false); }
+  hideLoading();
+  renderModalRombel();
+}
+
+async function migrasiSiswa() {
+  const target = document.getElementById('mr-target').value;
+  if (!target) { showToast('Pilih rombel tujuan.', false); return; }
+  if (!mrSel.size) { showToast('Centang dulu siswa yang akan dipindahkan.', false); return; }
+  const n = mrSel.size; const ids = [...mrSel]; mrSel = new Set();
+  await pindahkanSiswaIds(ids, target, `${n} siswa dipindahkan ke ${target}.`);
+}
+
+async function masukkanSiswa() {
+  if (!mrAddSel.size) { showToast('Centang dulu siswa yang akan dimasukkan.', false); return; }
+  const n = mrAddSel.size; const ids = [...mrAddSel]; mrAddSel = new Set();
+  await pindahkanSiswaIds(ids, mrRombel, `${n} siswa dimasukkan ke ${mrRombel}.`);
 }
 
 // ═══════════════════ KONFIRMASI GENERIK ═══════════════════
@@ -1125,6 +1254,7 @@ function confirmAction(title, msgHTML, fn) {
 
 // ═══════════════════ INIT ═══════════════════
 async function init() {
+  initIcons();
   // Enter → login
   document.getElementById('l-pass').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
   try {
@@ -1164,6 +1294,8 @@ Object.assign(window, {
   aJurnalTgl, aJurnalGuru, exportJurnalBulan,
   rekapSet, exportRekap,
   setAddItem, setDelItem, simpanSekolah, simpanAdmin,
+  kelolaRombel, renameRombel, migrasiSiswa, masukkanSiswa,
+  mrToggle, mrAddToggle, mrPilihSemua, mrSetSumber,
   closeModal, openModal,
 });
 
