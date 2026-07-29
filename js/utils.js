@@ -24,6 +24,14 @@ export function esc(s) {
     .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 }
 
+// Untuk teks yang disisipkan sebagai argumen string di dalam atribut onclick,
+// mis. onclick="fn('${escArg(mapel)}')". Kutip tunggal pada data (mis.
+// "Al-Qur'an Hadis") harus di-escape untuk JS lebih dulu, baru untuk HTML —
+// kalau hanya esc(), parser HTML mengembalikannya jadi ' dan memutus argumen.
+export function escArg(s) {
+  return esc(String(s ?? '').replace(/\\/g, '\\\\').replace(/'/g, "\\'"));
+}
+
 // "2026-07-29" → "Rabu, 29 Juli 2026"
 import { MONTHS, DF, KKTP_PREDIKAT } from "./constants.js";
 export function fmtTanggal(key) {
