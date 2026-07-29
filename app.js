@@ -631,7 +631,81 @@ function renderAGuru() {
           <button class="btn-icon" title="Reset password" onclick="resetPwGuru('${g.id}')">${ico('key',16)}</button>
           <button class="btn-icon" title="Hapus" onclick="hapusGuru('${g.id}')">${ico('trash',16)}</button>
         </div>`).join('') : `<div class="empty">Belum ada akun guru. Klik tombol Tambah.</div>`}
+    </div>
+    <div class="card">
+      <div class="section-title" style="justify-content:space-between">
+        <span>${ico('clipboard',15)} Rekap Data Guru</span>
+        <button class="btn-ghost" onclick="exportDataGuru()">${ico('download',13)} Ekspor Excel</button>
+      </div>
+      <div class="hint" style="margin-bottom:8px">Data diri, pendidikan, dan kepegawaian yang diisi masing-masing guru di menu Akun. Geser tabel ke samping untuk melihat kolom lainnya.</div>
+      ${guruList.length ? rekapDataGuruTable() : `<div class="empty">Belum ada data guru.</div>`}
     </div>`;
+}
+
+// Nilai sel rekap: '-' bila belum diisi guru.
+const dg = v => esc(v || '-');
+
+function rekapDataGuruTable() {
+  return `
+    <div class="table-wrap"><table class="tbl" style="min-width:1250px">
+      <tr>
+        <th>No</th><th>Nama</th><th>NIP / NUPTK</th><th>JK</th><th>Tempat, Tgl Lahir</th>
+        <th>No. HP / WA</th><th>Email</th><th>Pendidikan</th><th>Jurusan</th><th>Almamater</th>
+        <th class="num">Thn Lulus</th><th>Status Kepegawaian</th><th>TMT</th><th>Mapel</th><th>Alamat</th>
+      </tr>
+      ${guruList.map((g, i) => `
+      <tr>
+        <td class="num">${i + 1}</td>
+        <td style="white-space:nowrap;font-weight:800">${esc(g.nama)}</td>
+        <td>${dg(g.nip)}</td>
+        <td class="num">${g.jk ? esc(g.jk[0]) : '-'}</td>
+        <td style="white-space:nowrap">${g.tempatLahir || g.tglLahir ? `${dg(g.tempatLahir)}, ${dg(g.tglLahir)}` : '-'}</td>
+        <td>${dg(g.hp)}</td>
+        <td>${dg(g.email)}</td>
+        <td>${dg(g.pendidikan)}</td>
+        <td>${dg(g.jurusan)}</td>
+        <td>${dg(g.kampus)}</td>
+        <td class="num">${dg(g.tahunLulus)}</td>
+        <td>${dg(g.statusPeg)}</td>
+        <td style="white-space:nowrap">${dg(g.tmt)}</td>
+        <td>${dg((g.mapel || []).join(', '))}</td>
+        <td>${dg(g.alamat)}</td>
+      </tr>`).join('')}
+    </table></div>`;
+}
+
+async function exportDataGuru() {
+  if (!guruList.length) { showToast('Belum ada data guru.', false); return; }
+  showLoading('Menyiapkan ekspor...');
+  try {
+    const XLSX = await ensureXLSX();
+    const rows = guruList.map((g, i) => ({
+      No: i + 1,
+      Nama: g.nama,
+      Username: g.username,
+      'NIP / NUPTK': g.nip || '',
+      'Jenis Kelamin': g.jk || '',
+      'Tempat Lahir': g.tempatLahir || '',
+      'Tanggal Lahir': g.tglLahir || '',
+      'No. HP / WA': g.hp || '',
+      Email: g.email || '',
+      'Pendidikan Terakhir': g.pendidikan || '',
+      'Program Studi / Jurusan': g.jurusan || '',
+      'Perguruan Tinggi / Almamater': g.kampus || '',
+      'Tahun Lulus': g.tahunLulus || '',
+      'Status Kepegawaian': g.statusPeg || '',
+      'TMT Mengajar': g.tmt || '',
+      'Mata Pelajaran': (g.mapel || []).join(', '),
+      Alamat: g.alamat || '',
+    }));
+    const ws = XLSX.utils.json_to_sheet(rows);
+    ws['!cols'] = Object.keys(rows[0]).map(k => ({ wch: Math.max(k.length + 2, 14) }));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Data Guru');
+    xlsxDownload(wb, `rekap_data_guru_${dk()}.xlsx`);
+    showToast(`Data ${guruList.length} guru diekspor.`);
+  } catch (e) { console.error(e); showToast('Gagal ekspor.', false); }
+  hideLoading();
 }
 
 function openModalGuru(id) {
@@ -1344,6 +1418,7 @@ Object.assign(window, {
   renderAbsenList, setAbsen, setSemuaAbsen, toggleKbc, simpanJurnal, resetJurnalForm,
   editJurnal, hapusJurnal, lihatJurnal, gRiwayatBulan, simpanProfilGuru,
   openModalGuru, toggleMgMapel, simpanGuru, resetPwGuru, hapusGuru,
+  exportDataGuru,
   aSiswaFilter, openModalSiswa, simpanSiswa, hapusSiswa, hapusSiswaRombel,
   openModalUpload, downloadTemplateSiswa, prosesUploadSiswa,
   aJurnalTgl, aJurnalGuru, exportJurnalBulan,
