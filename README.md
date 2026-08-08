@@ -2,12 +2,36 @@
 
 Aplikasi web (PWA) jurnal mengajar guru untuk madrasah — **Kurikulum Merdeka Kemenag berbasis KBC (Kurikulum Berbasis Cinta)** — dengan absensi siswa yang diisi oleh masing-masing guru mata pelajaran saat masuk kelas.
 
+## Kelas Gabungan — isi sekali, laporan tetap per rombel
+
+Tiap tingkat terbagi menjadi dua rombel (7A & 7B, 8A & 8B, …), tetapi proses
+belajarnya berlangsung di **satu ruang**. Karena itu guru **tidak perlu mengisi
+dua kali**: pilih kelas **7A+7B**, daftar siswa kedua rombel muncul sekali
+(dengan pemisah per rombel), lalu simpan — satu pertemuan, satu kali isi.
+
+Yang tetap **dipisah per rombel**:
+
+| Keluaran | Bentuk pemisahan |
+|---|---|
+| Rekap absensi (guru & admin) | Dipilih per rombel; hanya siswa rombel itu yang dihitung |
+| Excel jurnal sebulan (admin) | Satu pertemuan gabungan → satu baris per rombel, kehadiran masing-masing |
+| PDF jurnal bulanan per guru | Kolom Rombel dan H/S/I/A dirinci per rombel pada baris pertemuan yang sama |
+| Leger & ekspor Excel nilai | Satu tabel/lembar per rombel, siap disalin ke template RDM |
+| Salin kolom nilai / NA / deskripsi | Tombol salin terpisah untuk tiap rombel |
+| Rekap nilai admin | Kelengkapan & leger tetap satu baris per guru × mapel × rombel |
+
+Penggabungan diatur admin di **Setelan → Daftar Rombel** (*Gabungkan rombel
+setingkat saat pengisian*), dan mengelompokkan rombel berdasarkan angka
+tingkatnya. Bila dimatikan, pengisian kembali per rombel seperti semula.
+Jurnal dan penilaian lama tidak ikut berubah — semuanya tetap terbaca sesuai
+cakupan aslinya.
+
 ## Fitur
 
 ### 👨‍🏫 Guru
-- **Isi jurnal mengajar** per pertemuan: tanggal, jam ke, rombel, mapel, materi/topik, tujuan pembelajaran (TP), kegiatan, metode/model, dan asesmen.
+- **Isi jurnal mengajar** per pertemuan: tanggal, jam ke, kelas (rombel tunggal atau gabungan seperti 7A+7B), mapel, materi/topik, tujuan pembelajaran (TP), kegiatan, metode/model, dan asesmen.
 - **Integrasi Nilai Cinta (KBC)**: pilih nilai cinta yang diintegrasikan (Cinta Allah & Rasul-Nya, Cinta Ilmu, Cinta Diri & Sesama, Cinta Lingkungan, Cinta Tanah Air) beserta wujud penerapannya.
-- **Absensi siswa** langsung di dalam jurnal: pilih rombel → daftar siswa muncul otomatis → tandai Hadir/Sakit/Izin/Alpa (default Hadir).
+- **Absensi siswa** langsung di dalam jurnal: pilih kelas → daftar siswa muncul otomatis (dikelompokkan per rombel bila kelasnya gabungan) → tandai Hadir/Sakit/Izin/Alpa (default Hadir). Rekap kehadiran disimpan per rombel.
 - **Riwayat jurnal** per bulan, bisa diedit/dihapus.
 - **Ekspor PDF laporan jurnal bulanan**: satu klik dari menu Riwayat, menghasilkan berkas siap cetak berisi kop madrasah, identitas guru, tabel seluruh pertemuan bulan tersebut (materi, TP, kegiatan/metode/asesmen, nilai KBC, rekap kehadiran), dan kolom tanda tangan guru & kepala madrasah.
 - **Rekap absensi** per rombel per bulan (khusus kelas yang diajar sendiri) + ekspor Excel.
@@ -23,8 +47,10 @@ lalu memindahkannya ke RDM tanpa mengetik ulang satu per satu.
 - **Jenis penilaian mengikuti menu Penilaian di RDM** — Formatif/Harian, Sumatif
   Lingkup Materi, dan Sumatif Akhir Semester (SAS, dibatasi satu per mapel per
   semester). Satu penilaian di aplikasi = satu kolom di RDM.
-- **Input per rombel + mapel**: daftar siswa muncul otomatis, tinggal isi angka
-  0–100. Nilai kosong berarti belum dinilai dan tidak ikut dihitung.
+- **Input per kelas + mapel**: daftar siswa muncul otomatis, tinggal isi angka
+  0–100. Nilai kosong berarti belum dinilai dan tidak ikut dihitung. Kelas
+  gabungan (7A+7B) cukup diisi sekali; leger, salinan kolom, dan ekspornya
+  tetap terpisah per rombel mengikuti template RDM.
 - **Urutan siswa bisa disamakan dengan template Excel RDM** (Nama A–Z atau NISN,
   diatur admin) sehingga satu kolom nilai bisa disalin sekaligus tanpa tergeser.
 - **Salin per kolom** ke papan klip (satu nilai per baris) — untuk di-*paste*
@@ -32,7 +58,8 @@ lalu memindahkannya ke RDM tanpa mengetik ulang satu per satu.
 - **Leger & deskripsi**: rata-rata tiap komponen, Nilai Akhir berbobot, predikat
   KKTP, dan **deskripsi capaian otomatis** (menyorot penilaian tertinggi dan
   terendah) yang tinggal disalin ke kolom deskripsi RDM.
-- **Ekspor Excel** multi-sheet: `Formatif`, `Sumatif LM`, `SAS`, dan `Leger`.
+- **Ekspor Excel** multi-sheet: `Formatif`, `Sumatif LM`, `SAS`, dan `Leger` —
+  satu set lembar per rombel bila kelasnya gabungan (mis. `Leger 7A`, `Leger 7B`).
 
 Nilai Akhir memakai bobot yang diatur admin — **samakan dengan menu Bobot di RDM**.
 Komponen yang belum ada nilainya diabaikan dan bobotnya dinormalkan ulang, agar NA
@@ -53,7 +80,7 @@ predikat yang dilihat guru selalu sejalan.
 - **Kelola data siswa** sederhana (Nama, Rombel, NISN): tambah manual atau **upload Excel** (template disediakan), hapus per siswa atau per rombel.
 - **Monitor jurnal** semua guru per tanggal, dengan dua ekspor: **Excel sebulan** (jurnal semua guru) dan **PDF per guru** (laporan bulanan guru terpilih, format sama seperti yang dicetak guru).
 - **Rekap** dua tab: **Absensi** seluruh rombel, dan **Nilai** (lihat di bawah). Keduanya bisa diekspor ke Excel.
-- **Pengaturan**: identitas madrasah, tahun pelajaran/semester, kota & nama/NIP kepala madrasah (dipakai pada kop dan kolom tanda tangan PDF), **pengaturan penilaian** (batas tuntas KKTP default + per mapel, bobot Nilai Akhir, urutan siswa pada ekspor), daftar rombel, daftar mapel, akun admin.
+- **Pengaturan**: identitas madrasah, tahun pelajaran/semester, kota & nama/NIP kepala madrasah (dipakai pada kop dan kolom tanda tangan PDF), **pengaturan penilaian** (batas tuntas KKTP default + per mapel, bobot Nilai Akhir, urutan siswa pada ekspor), daftar rombel + **penggabungan rombel setingkat saat pengisian**, daftar mapel, akun admin.
 
 #### Rekap Nilai (tab Nilai di menu Rekap admin)
 
@@ -84,11 +111,11 @@ seperti menu Nilai milik guru.
 | Koleksi/Dokumen | Isi |
 |---|---|
 | `jm_config/admin` | `{username, pwHash}` |
-| `jm_config/sekolah` | `{nama, tahunPelajaran, semester, kota, kepala, nipKepala, kktpMin, kktpMapel{mapel: 0..100}, bobot{formatif,sumatif,sas}, urutSiswa, rombel[], mapel[]}` |
+| `jm_config/sekolah` | `{nama, tahunPelajaran, semester, kota, kepala, nipKepala, kktpMin, kktpMapel{mapel: 0..100}, bobot{formatif,sumatif,sas}, urutSiswa, gabungRombel, rombel[], mapel[]}` |
 | `jm_guru/{id}` | `{nama, nip, username, pwHash, mapel[]}` |
 | `jm_siswa/{id}` | `{nama, rombel, nisn}` |
-| `jm_jurnal/{id}` | jurnal + `absen{siswaId: H\|S\|I\|A}` + `rekap{H,S,I,A}` |
-| `jm_nilai/{id}` | satu kolom penilaian: `{guruId, mapel, rombel, tahunPelajaran, semester, jenis, nama, urut, nilai{siswaId: 0..100}}` |
+| `jm_jurnal/{id}` | jurnal + `rombelGabung[]` + `absen{siswaId: H\|S\|I\|A}` + `rekap{H,S,I,A}` + `rekapRombel{rombel:{H,S,I,A}}` |
+| `jm_nilai/{id}` | satu kolom penilaian: `{guruId, mapel, rombel, rombelGabung[], tahunPelajaran, semester, jenis, nama, urut, nilai{siswaId: 0..100}}` |
 
 ## Memulai
 

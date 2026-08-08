@@ -10,18 +10,23 @@
 //
 // Data Firestore (prefix jm_ agar tidak bentrok dengan data lama):
 //  jm_config/admin   {username, pwHash}
-//  jm_config/sekolah {nama, tahunPelajaran, semester, rombel[], mapel[]}
+//  jm_config/sekolah {nama, tahunPelajaran, semester, gabungRombel, rombel[], mapel[]}
 //  jm_guru/{id}      {nama, nip, username, pwHash, mapel[]}
 //  jm_siswa/{id}     {nama, rombel, nisn}
-//  jm_jurnal/{id}    {guruId, guruNama, tanggal, jamKe, rombel, mapel,
-//                     materi, tujuan, kegiatan, metode, asesmen,
+//  jm_jurnal/{id}    {guruId, guruNama, tanggal, jamKe, rombel, rombelGabung[],
+//                     mapel, materi, tujuan, kegiatan, metode, asesmen,
 //                     kbc[], kbcCatatan, refleksi,
 //                     absen{siswaId:H|S|I|A}, rekap{H,S,I,A},
-//                     createdAt, updatedAt}
+//                     rekapRombel{rombel:{H,S,I,A}}, createdAt, updatedAt}
 //  jm_nilai/{id}     satu dokumen = satu kolom penilaian (satu kali penilaian)
-//                    {guruId, mapel, rombel, tahunPelajaran, semester,
-//                     jenis:'formatif'|'sumatif'|'sas', nama, urut,
+//                    {guruId, mapel, rombel, rombelGabung[], tahunPelajaran,
+//                     semester, jenis:'formatif'|'sumatif'|'sas', nama, urut,
 //                     nilai{siswaId: 0..100}, createdAt, updatedAt}
+//
+// Kelas gabungan: rombel setingkat (7A & 7B) belajar di satu ruang, jadi guru
+// mengisi jurnal/absensi/nilai SEKALI untuk keduanya. Dokumen menyimpan
+// rombelGabung[] berisi rombel yang tercakup; seluruh laporan (rekap absensi,
+// Excel, PDF, leger, rekap nilai) tetap memecah angkanya per rombel.
 //
 // Catatan penilaian: aplikasi ini alat bantu guru, BUKAN pengganti RDM.
 // Struktur jenis penilaian & urutan siswa sengaja dibuat mengikuti RDM agar
@@ -38,7 +43,8 @@ import {
 } from "./js/constants.js";
 import {
   hashPw, uid, dk, esc, escArg, fmtTanggal, cmpRombel, cmpNama, hitungRekap,
-  num, rata, bulat, kktpDari, urutkanSiswa, deskripsiCapaian
+  num, rata, bulat, kktpDari, urutkanSiswa, deskripsiCapaian,
+  tingkatOf, labelKelas, kelasDariRombel, rombelDoc, docPunyaRombel
 } from "./js/utils.js";
 import { showLoading, hideLoading, showToast, showScreen, openModal, closeModal, togglePw } from "./js/ui-helpers.js";
 import { ico, initIcons } from "./js/icons.js";
@@ -118,6 +124,66 @@ function rombelListSiswa() {
 }
 function siswaByRombel(r) {
   return siswaList.filter(s => s.rombel === r).sort(cmpNama);
+}
+
+// ── KELAS GABUNGAN (unit pengisian) ──
+// Guru memilih "kelas" (mis. 7A+7B) sekali; laporan tetap per rombel.
+function gabungAktif() {
+  return sekolah.gabungRombel !== false;
+}
+// Kelas untuk form jurnal — hanya rombel resmi dari pengaturan.
+function kelasList() {
+  return kelasDariRombel(rombelList(), gabungAktif());
+}
+// Kelas untuk menu Nilai — ikut menyertakan rombel lama yang masih dipakai siswa.
+function kelasListSiswa() {
+  return kelasDariRombel(rombelListSiswa(), gabungAktif());
+}
+// Terjemahkan nilai dropdown menjadi kelas. Nilai lama (mis. "7A" saat
+// penggabungan sudah aktif) tetap dikenali apa adanya agar jurnal/penilaian
+// lama masih bisa dibuka dan diedit tanpa berubah cakupannya.
+function kelasByKey(key, daftar) {
+  if (!key) return null;
+  const list = daftar || kelasListSiswa();
+  return list.find(k => k.key === key)
+    || { key, label: key, rombel: key.split('+').filter(Boolean) };
+}
+// Kelas yang mencakup satu dokumen jurnal/nilai (dipakai saat mengedit).
+function kelasDoc(d) {
+  const r = rombelDoc(d);
+  return { key: labelKelas(r), label: labelKelas(r), rombel: r };
+}
+function siswaByKelas(kelas) {
+  return (kelas?.rombel || []).flatMap(r => siswaByRombel(r));
+}
+// Pecah satu absen gabungan menjadi rekap per rombel, supaya laporan tetap
+// terpisah walau pengisiannya sekali. Siswa yang sudah dihapus diabaikan.
+function rekapPerRombel(absen, rombel) {
+  const petaRombel = Object.fromEntries(siswaList.map(s => [s.id, s.rombel]));
+  const hasil = Object.fromEntries((rombel || []).map(r => [r, { H: 0, S: 0, I: 0, A: 0 }]));
+  for (const [sid, st] of Object.entries(absen || {})) {
+    const r = hasil[petaRombel[sid]];
+    if (r && r[st] !== undefined) r[st]++;
+  }
+  return hasil;
+}
+// Opsi <option> daftar kelas, menyertakan nilai terpilih yang tidak lagi ada
+// di daftar (rombel lama / hasil penggabungan yang berubah).
+function opsiKelas(daftar, terpilih) {
+  const opts = [...daftar];
+  if (terpilih && !opts.some(k => k.key === terpilih)) {
+    opts.unshift({ key: terpilih, label: terpilih, rombel: terpilih.split('+') });
+  }
+  return opts.map(k =>
+    `<option value="${esc(k.key)}" ${k.key === terpilih ? 'selected' : ''}>${esc(k.label)}</option>`).join('');
+}
+// Teks pendek untuk lingkaran avatar (38px): "7A+7B" → "7".
+function ringkasKelas(d) {
+  const r = rombelDoc(d);
+  if (!r.length) return '?';
+  if (r.length === 1) return r[0];
+  const tk = [...new Set(r.map(tingkatOf))];
+  return tk.length === 1 && tk[0] !== null ? String(tk[0]) : String(r.length) + ' rbl';
 }
 
 // ── LAZY-LOAD XLSX (hanya untuk upload/template/ekspor) ──
@@ -219,7 +285,7 @@ async function enterApp() {
     // Bersihkan filter & cache nilai milik sesi sebelumnya.
     nilaiList = [];
     nilaiInputState = {}; nilaiDirty = false;
-    for (const k of ['loaded', 'rombel', 'mapel', 'open', 'jenis']) delete nilaiPage().dataset[k];
+    for (const k of ['loaded', 'kelas', 'mapel', 'open', 'jenis']) delete nilaiPage().dataset[k];
     gNav('home');
   }
 }
@@ -276,12 +342,13 @@ async function renderGHome() {
 function jurnalItemHTML(j, showGuru) {
   const r = j.rekap || {};
   const kbcBadge = (j.kbc || []).length ? ` · ${ico('heart', 11)} ${(j.kbc || []).length}` : '';
+  const label = rombelDoc(j).join(' + ') || '?';
   return `
   <div class="item" style="cursor:pointer" onclick="lihatJurnal('${j.id}')">
-    <div class="avatar">${esc(j.rombel || '?')}</div>
+    <div class="avatar">${esc(ringkasKelas(j))}</div>
     <div class="grow">
       <div class="t1">${esc(j.mapel)} — ${esc(j.materi)}</div>
-      <div class="t2">${showGuru ? esc(j.guruNama) + ' · ' : ''}${esc(fmtTanggal(j.tanggal))}${j.jamKe ? ' · Jam ke-' + esc(j.jamKe) : ''}${kbcBadge}</div>
+      <div class="t2">${esc(label)} · ${showGuru ? esc(j.guruNama) + ' · ' : ''}${esc(fmtTanggal(j.tanggal))}${j.jamKe ? ' · Jam ke-' + esc(j.jamKe) : ''}${kbcBadge}</div>
       <div class="t2">
         <span style="color:#5a9b86">H:${r.H ?? 0}</span> · <span style="color:#a8874d">S:${r.S ?? 0}</span> ·
         <span style="color:#5a8aaa">I:${r.I ?? 0}</span> · <span style="color:#a86870">A:${r.A ?? 0}</span>
@@ -294,9 +361,7 @@ function jurnalItemHTML(j, showGuru) {
 // ═══════════════════ GURU: FORM JURNAL ═══════════════════
 function initJurnalForm() {
   document.getElementById('j-tanggal').value = dk();
-  const rSel = document.getElementById('j-rombel');
-  rSel.innerHTML = `<option value="">— pilih rombel —</option>` +
-    rombelList().map(r => `<option value="${esc(r)}">${esc(r)}</option>`).join('');
+  isiOpsiKelasJurnal();
   const mList = (currentUser.mapel && currentUser.mapel.length) ? currentUser.mapel : sekolah.mapel;
   document.getElementById('j-mapel').innerHTML = `<option value="">— pilih mapel —</option>` +
     mList.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
@@ -318,23 +383,55 @@ function toggleKbc(key, el) {
   el.classList.toggle('on', kbcState.has(key));
 }
 
+// Isi dropdown kelas pada form jurnal. `terpilih` dipakai saat mengedit jurnal
+// lama yang cakupannya tidak lagi ada di daftar kelas sekarang.
+function isiOpsiKelasJurnal(terpilih = '') {
+  document.getElementById('j-rombel').innerHTML =
+    `<option value="">— pilih kelas —</option>` + opsiKelas(kelasList(), terpilih);
+  document.getElementById('j-rombel').value = terpilih;
+}
+
+// Kelas yang sedang dipilih di form jurnal.
+function kelasJurnal() {
+  return kelasByKey(document.getElementById('j-rombel').value, kelasList());
+}
+
 function renderAbsenList() {
-  const rombel = document.getElementById('j-rombel').value;
+  const kelas = kelasJurnal();
   const wrap = document.getElementById('absen-list');
   const counter = document.getElementById('absen-counter');
-  if (!rombel) { wrap.innerHTML = `<div class="empty">Pilih rombel terlebih dahulu.</div>`; counter.textContent = ''; absenState = {}; return; }
-  const siswa = siswaByRombel(rombel);
-  if (!siswa.length) { wrap.innerHTML = `<div class="empty">Belum ada data siswa untuk rombel ${esc(rombel)}.<br>Hubungi admin untuk mengunggah data siswa.</div>`; counter.textContent = ''; absenState = {}; return; }
+  const kosong = (msg) => { wrap.innerHTML = `<div class="empty">${msg}</div>`; counter.textContent = ''; absenState = {}; };
+  if (!kelas) { kosong('Pilih kelas terlebih dahulu.'); return; }
+  const siswa = siswaByKelas(kelas);
+  if (!siswa.length) {
+    kosong(`Belum ada data siswa untuk ${esc(kelas.label)}.<br>Hubungi admin untuk mengunggah data siswa.`);
+    return;
+  }
   // Pertahankan status yang sudah dipilih; siswa baru default Hadir.
   const prev = absenState; absenState = {};
   for (const s of siswa) absenState[s.id] = prev[s.id] || 'H';
-  counter.textContent = `${siswa.length} siswa`;
-  wrap.innerHTML = siswa.map((s, i) => `
-    <div class="absen-row">
-      <div style="width:22px;text-align:right;font-size:12px;font-weight:800;color:var(--muted)">${i + 1}</div>
-      <div class="absen-nama">${esc(s.nama)}<div class="absen-nisn">NISN ${esc(s.nisn || '-')}</div></div>
-      <div class="absen-btns" id="ab-${s.id}">${absenBtnsHTML(s.id)}</div>
-    </div>`).join('');
+  const gabungan = kelas.rombel.length > 1;
+  counter.textContent = gabungan
+    ? `${siswa.length} siswa · ${kelas.rombel.map(r => `${r}: ${siswaByRombel(r).length}`).join(' · ')}`
+    : `${siswa.length} siswa`;
+  // Daftar tetap dikelompokkan per rombel walau diisi sekali, agar guru
+  // gampang mencari nama dan rekapnya jelas terpisah.
+  let no = 0;
+  wrap.innerHTML = kelas.rombel.map(r => {
+    const anggota = siswaByRombel(r);
+    if (!anggota.length) return gabungan
+      ? `<div class="grup-rombel">${esc(r)} <span class="hint">— belum ada siswa</span></div>` : '';
+    return (gabungan ? `<div class="grup-rombel">${esc(r)} <span class="hint">${anggota.length} siswa</span></div>` : '')
+      + anggota.map(s => {
+        no++;
+        return `
+        <div class="absen-row">
+          <div style="width:22px;text-align:right;font-size:12px;font-weight:800;color:var(--muted)">${no}</div>
+          <div class="absen-nama">${esc(s.nama)}<div class="absen-nisn">NISN ${esc(s.nisn || '-')}</div></div>
+          <div class="absen-btns" id="ab-${s.id}">${absenBtnsHTML(s.id)}</div>
+        </div>`;
+      }).join('');
+  }).join('');
 }
 function absenBtnsHTML(sid) {
   return ABSEN_STATUS.map(st => {
@@ -354,16 +451,20 @@ function setSemuaAbsen(st) {
 
 async function simpanJurnal() {
   const tanggal = document.getElementById('j-tanggal').value;
-  const rombel = document.getElementById('j-rombel').value;
+  const kelas = kelasJurnal();
   const mapel = document.getElementById('j-mapel').value;
   const materi = document.getElementById('j-materi').value.trim();
-  if (!tanggal || !rombel || !mapel || !materi) { showToast('Tanggal, rombel, mapel, dan materi wajib diisi.', false); return; }
-  if (!Object.keys(absenState).length) { showToast('Tidak ada siswa pada rombel ini — absensi kosong.', false); return; }
+  if (!tanggal || !kelas || !mapel || !materi) { showToast('Tanggal, kelas, mapel, dan materi wajib diisi.', false); return; }
+  if (!Object.keys(absenState).length) { showToast('Tidak ada siswa pada kelas ini — absensi kosong.', false); return; }
   const now = Date.now();
   const data = {
     guruId: currentUser.id,
     guruNama: currentUser.nama,
-    tanggal, rombel, mapel, materi,
+    tanggal, mapel, materi,
+    // rombel = label pengisian (mis. "7A+7B"); rombelGabung = rombel yang
+    // benar-benar tercakup, dipakai semua laporan untuk memisah per rombel.
+    rombel: kelas.label,
+    rombelGabung: [...kelas.rombel],
     jamKe: document.getElementById('j-jamke').value.trim(),
     tujuan: document.getElementById('j-tujuan').value.trim(),
     kegiatan: document.getElementById('j-kegiatan').value.trim(),
@@ -374,6 +475,9 @@ async function simpanJurnal() {
     refleksi: document.getElementById('j-refleksi').value.trim(),
     absen: { ...absenState },
     rekap: hitungRekap(absenState),
+    // Rekap per rombel disimpan agar laporan (mis. PDF) tetap bisa dipecah
+    // walau siswanya kelak pindah rombel atau dihapus.
+    rekapRombel: rekapPerRombel(absenState, kelas.rombel),
     updatedAt: now,
   };
   showLoading('Menyimpan jurnal...');
@@ -398,7 +502,7 @@ function resetJurnalForm() {
   document.getElementById('j-batal').style.display = 'none';
   document.getElementById('j-tanggal').value = dk();
   document.getElementById('j-jamke').value = '';
-  document.getElementById('j-rombel').value = '';
+  isiOpsiKelasJurnal();
   document.getElementById('j-mapel').value = '';
   for (const id of ['j-materi', 'j-tujuan', 'j-kegiatan', 'j-kbc-catatan', 'j-refleksi'])
     document.getElementById(id).value = '';
@@ -419,7 +523,8 @@ async function editJurnal(id) {
     document.getElementById('j-batal').style.display = 'block';
     document.getElementById('j-tanggal').value = j.tanggal;
     document.getElementById('j-jamke').value = j.jamKe || '';
-    document.getElementById('j-rombel').value = j.rombel;
+    // Jurnal lama (sebelum penggabungan) tetap dibuka dengan cakupan aslinya.
+    isiOpsiKelasJurnal(kelasDoc(j).key);
     document.getElementById('j-mapel').value = j.mapel;
     document.getElementById('j-materi').value = j.materi || '';
     document.getElementById('j-tujuan').value = j.tujuan || '';
@@ -480,19 +585,28 @@ async function lihatJurnal(id) {
     const kbcHTML = (j.kbc || []).length
       ? (j.kbc || []).map(k => { const v = KBC_VALUES.find(x => x.key === k); return v ? `<span class="badge" style="background:var(--sage3);color:var(--sage2);margin:2px 3px 0 0">${v.label}</span>` : ''; }).join('')
       : '<span class="hint">—</span>';
-    const siswa = siswaByRombel(j.rombel);
-    const namaSiswa = Object.fromEntries(siswaList.map(s => [s.id, s.nama]));
-    const absenRows = Object.entries(j.absen || {})
-      .map(([sid, st]) => ({ nama: namaSiswa[sid] || '(siswa terhapus)', st }))
-      .sort((a, b) => a.nama.localeCompare(b.nama, 'id'));
+    const rombel = rombelDoc(j);
+    const petaSiswa = Object.fromEntries(siswaList.map(s => [s.id, s]));
+    // Kelompokkan absensi per rombel; siswa yang sudah dihapus/pindah masuk
+    // kelompok "lainnya" agar tidak hilang dari tampilan.
+    const grupAbsen = new Map(rombel.map(x => [x, []]));
+    for (const [sid, st] of Object.entries(j.absen || {})) {
+      const s = petaSiswa[sid];
+      const key = s && grupAbsen.has(s.rombel) ? s.rombel : '';
+      if (!grupAbsen.has(key)) grupAbsen.set(key, []);
+      grupAbsen.get(key).push({ nama: s?.nama || '(siswa terhapus)', st });
+    }
+    for (const arr of grupAbsen.values()) arr.sort((a, b) => a.nama.localeCompare(b.nama, 'id'));
+    const rekapR = j.rekapRombel || rekapPerRombel(j.absen, rombel);
     const r = j.rekap || hitungRekap(j.absen);
+    const rekapTeks = (x) => `H:${x?.H ?? 0} S:${x?.S ?? 0} I:${x?.I ?? 0} A:${x?.A ?? 0}`;
     const row = (l, v) => v ? `<div style="margin-bottom:8px"><div style="font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase">${l}</div><div style="font-size:13.5px;font-weight:600;line-height:1.5">${esc(v)}</div></div>` : '';
     const canEdit = currentUser.role === 'guru' && j.guruId === currentUser.id;
     const canDel = canEdit || currentUser.role === 'admin';
     document.getElementById('mj-body').innerHTML = `
       ${row('Guru', j.guruNama)}
       ${row('Tanggal', fmtTanggal(j.tanggal) + (j.jamKe ? ' · Jam ke-' + j.jamKe : ''))}
-      ${row('Rombel / Mapel', j.rombel + ' — ' + j.mapel)}
+      ${row('Rombel / Mapel', (rombel.join(' + ') || '-') + ' — ' + j.mapel)}
       ${row('Materi', j.materi)}
       ${row('Tujuan Pembelajaran', j.tujuan)}
       ${row('Kegiatan', j.kegiatan)}
@@ -501,13 +615,18 @@ async function lihatJurnal(id) {
       ${row('Wujud Penerapan KBC', j.kbcCatatan)}
       ${row('Refleksi / Catatan', j.refleksi)}
       <div style="margin:10px 0 6px;font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase">
-        Absensi — H:${r.H} S:${r.S} I:${r.I} A:${r.A} (${Object.keys(j.absen || {}).length} siswa)</div>
+        Absensi — ${rekapTeks(r)} (${Object.keys(j.absen || {}).length} siswa)</div>
+      ${rombel.length > 1 ? `<div class="hint" style="margin-bottom:6px">Diisi sekali untuk ${esc(rombel.join(' + '))}, rekapnya tetap terpisah:
+        ${rombel.map(x => `<b>${esc(x)}</b> ${esc(rekapTeks(rekapR[x]))}`).join(' · ')}</div>` : ''}
       <div style="max-height:220px;overflow-y:auto;border:1px solid var(--border);border-radius:12px;padding:4px 12px">
-        ${absenRows.map(a => { const m = ABSEN_MAP[a.st] || {}; return `
+        ${[...grupAbsen.entries()].filter(([, rows]) => rows.length).map(([grup, rows]) => (
+          (rombel.length > 1 || !grup ? `<div class="grup-rombel">${esc(grup || 'Siswa lain / sudah pindah')}</div>` : '')
+          + rows.map(a => { const m = ABSEN_MAP[a.st] || {}; return `
           <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bg2);font-size:12.5px;font-weight:600">
             <span>${esc(a.nama)}</span>
             <span class="badge" style="background:${m.bg};color:${m.color}">${m.label || a.st}</span>
-          </div>`; }).join('')}
+          </div>`; }).join('')
+        )).join('')}
       </div>
       <div style="display:flex;gap:8px;margin-top:14px">
         ${canEdit ? `<button class="btn btn-teal" style="flex:1" onclick="editJurnal('${id}')">${ico('pencil',14)} Edit</button>` : ''}
@@ -543,13 +662,28 @@ function nilaiPage() { return document.getElementById('page-g-nilai'); }
 
 function nilaiCtx() {
   const el = nilaiPage();
-  return { rombel: el.dataset.rombel || '', mapel: el.dataset.mapel || '', open: el.dataset.open || '' };
+  const kelas = kelasByKey(el.dataset.kelas || '', kelasListSiswa());
+  return { kelas, mapel: el.dataset.mapel || '', open: el.dataset.open || '' };
 }
 
-// Kolom penilaian untuk rombel+mapel pada TP & semester yang sedang berjalan.
-function kolomNilai(rombel, mapel) {
+// Kelas satu rombel saja — dipakai saat laporan (leger/ekspor/salin) harus
+// dipecah walau pengisiannya gabungan.
+function kelasSatu(r) {
+  return { key: r, label: r, rombel: [r] };
+}
+
+// Siswa satu kelas, dikelompokkan per rombel lalu diurutkan sesuai pengaturan
+// (urutan template RDM berlaku di dalam masing-masing rombel).
+function siswaKelasUrut(kelas) {
+  return (kelas?.rombel || []).flatMap(r => urutkanSiswa(siswaByRombel(r), sekolah.urutSiswa));
+}
+
+// Kolom penilaian yang mencakup kelas terpilih, pada TP & semester berjalan.
+// Satu kolom kelas gabungan (7A+7B) muncul juga saat leger dipecah per rombel.
+function kolomNilai(kelas, mapel) {
+  const rombel = kelas?.rombel || [];
   return nilaiList
-    .filter(n => n.rombel === rombel && n.mapel === mapel
+    .filter(n => n.mapel === mapel && rombel.some(r => docPunyaRombel(n, r))
       && n.tahunPelajaran === sekolah.tahunPelajaran && n.semester === sekolah.semester)
     .sort((a, b) => (a.urut || 0) - (b.urut || 0) || String(a.nama).localeCompare(String(b.nama), 'id'));
 }
@@ -575,11 +709,11 @@ function hitungNA(rf, rs, sas) {
   return bagian.reduce((a, [v, w]) => a + v * w, 0) / total;
 }
 
-function hitungLeger(rombel, mapel) {
-  const kolom = kolomNilai(rombel, mapel);
+function hitungLeger(kelas, mapel) {
+  const kolom = kolomNilai(kelas, mapel);
   const grup = { formatif: [], sumatif: [], sas: [] };
   for (const k of kolom) if (grup[k.jenis]) grup[k.jenis].push(k);
-  const siswa = urutkanSiswa(siswaByRombel(rombel), sekolah.urutSiswa);
+  const siswa = siswaKelasUrut(kelas);
   const kktpMin = kktpUntuk(mapel);
   const baris = siswa.map(s => {
     const val = k => num(k.nilai?.[s.id]);
@@ -626,7 +760,7 @@ function nilaiFilter(key, val) {
 
 function renderNilaiIndex() {
   const el = nilaiPage();
-  const { rombel, mapel } = nilaiCtx();
+  const { kelas, mapel } = nilaiCtx();
   const mapelOpts = currentUser.mapel?.length ? currentUser.mapel : sekolah.mapel;
   el.innerHTML = `
     <div class="card card-sage">
@@ -635,11 +769,13 @@ function renderNilaiIndex() {
         Alat bantu menyiapkan nilai sebelum diinput ke <b>RDM</b>. Satu penilaian di sini
         sama dengan satu kolom di RDM. Aktif untuk TP <b>${esc(sekolah.tahunPelajaran)}</b>
         semester <b>${esc(sekolah.semester)}</b>.
+        ${(kelas?.rombel.length || 0) > 1 ? `<br>Kelas <b>${esc(kelas.label)}</b> diisi sekali;
+          leger, salin kolom, dan ekspor tetap terpisah per rombel — samakan dengan RDM.` : ''}
       </div>
       <div class="filter-row" style="margin-bottom:0">
-        <select class="input" onchange="nilaiFilter('rombel',this.value)">
-          <option value="">— pilih rombel —</option>
-          ${rombelListSiswa().map(r => `<option value="${esc(r)}" ${r === rombel ? 'selected' : ''}>${esc(r)}</option>`).join('')}
+        <select class="input" onchange="nilaiFilter('kelas',this.value)">
+          <option value="">— pilih kelas —</option>
+          ${opsiKelas(kelasListSiswa(), kelas?.key || '')}
         </select>
         <select class="input" onchange="nilaiFilter('mapel',this.value)">
           <option value="">— pilih mapel —</option>
@@ -647,21 +783,31 @@ function renderNilaiIndex() {
         </select>
       </div>
     </div>
-    ${rombel && mapel
-      ? blokDaftarPenilaian(rombel, mapel) + blokLeger(rombel, mapel)
-      : `<div class="card"><div class="empty">Pilih rombel dan mata pelajaran untuk mulai menilai.</div></div>`}`;
+    ${kelas && mapel
+      ? blokDaftarPenilaian(kelas, mapel) + blokLeger(kelas, mapel)
+      : `<div class="card"><div class="empty">Pilih kelas dan mata pelajaran untuk mulai menilai.</div></div>`}`;
 }
 
-function blokDaftarPenilaian(rombel, mapel) {
-  const { grup, siswa } = hitungLeger(rombel, mapel);
+function blokDaftarPenilaian(kelas, mapel) {
+  const { grup, siswa } = hitungLeger(kelas, mapel);
   if (!siswa.length) {
-    return `<div class="card"><div class="empty">Belum ada data siswa untuk rombel ${esc(rombel)}.<br>Hubungi admin untuk mengunggah data siswa.</div></div>`;
+    return `<div class="card"><div class="empty">Belum ada data siswa untuk ${esc(kelas.label)}.<br>Hubungi admin untuk mengunggah data siswa.</div></div>`;
   }
+  const gabungan = kelas.rombel.length > 1;
+  // Template RDM disusun per rombel, jadi tombol salin dipecah per rombel
+  // walau nilainya diisi sekali.
+  const tombolSalin = (k) => gabungan
+    ? `<div style="display:flex;gap:6px;flex-wrap:wrap;padding:0 0 10px 6px">
+         ${kelas.rombel.map(r => `<button class="btn-ghost" style="padding:5px 10px"
+           title="Salin nilai siswa ${esc(r)} untuk ditempel ke RDM"
+           onclick="salinKolom('${k.id}','${escArg(r)}')">${ico('copy', 12)} ${esc(r)}</button>`).join('')}
+       </div>`
+    : '';
   return `
     <div class="card">
       <div class="section-title" style="justify-content:space-between">
         <span>${ico('clipboard', 15)} Daftar Penilaian</span>
-        <span class="badge-mini">${siswa.length} siswa</span>
+        <span class="badge-mini">${siswa.length} siswa${gabungan ? ` · ${kelas.rombel.join(' + ')}` : ''}</span>
       </div>
       ${NILAI_JENIS.map(j => {
         const list = grup[j.key] || [];
@@ -671,17 +817,23 @@ function blokDaftarPenilaian(rombel, mapel) {
         <div style="margin-bottom:14px">
           <div style="font-size:12px;font-weight:800;margin-bottom:4px">${esc(j.label)}</div>
           ${list.map(k => {
-            const terisi = Object.values(k.nilai || {}).filter(v => num(v) !== null).length;
+            const terisi = siswa.filter(s => num(k.nilai?.[s.id]) !== null).length;
             const lengkap = terisi === siswa.length;
+            const cakupan = rombelDoc(k);
+            // Penilaian lama yang cuma mencakup sebagian rombel ditandai,
+            // supaya guru tahu kenapa isiannya belum lengkap.
+            const sebagian = gabungan && cakupan.length < kelas.rombel.length;
             return `<div class="item">
               <div class="grow" style="cursor:pointer" onclick="bukaNilai('${k.id}')">
                 <div class="t1">${esc(k.nama)}</div>
-                <div class="t2" style="color:${lengkap ? '#5a9b86' : ''}">${terisi}/${siswa.length} siswa terisi</div>
+                <div class="t2" style="color:${lengkap ? '#5a9b86' : ''}">${terisi}/${siswa.length} siswa terisi${
+                  sebagian ? ` · hanya ${esc(cakupan.join(' + '))}` : ''}</div>
               </div>
-              <button class="btn-icon" title="Salin kolom nilai" onclick="salinKolom('${k.id}')">${ico('copy', 16)}</button>
+              ${gabungan ? '' : `<button class="btn-icon" title="Salin kolom nilai" onclick="salinKolom('${k.id}')">${ico('copy', 16)}</button>`}
               <button class="btn-icon" title="Isi / ubah nilai" onclick="bukaNilai('${k.id}')">${ico('pencil', 16)}</button>
               <button class="btn-icon" title="Hapus penilaian" onclick="hapusNilai('${k.id}')">${ico('trash', 16)}</button>
-            </div>`;
+            </div>
+            ${tombolSalin(k)}`;
           }).join('') || `<div class="hint" style="padding:2px 0 6px">Belum ada.</div>`}
           ${bisaTambah ? `<button class="btn-ghost" onclick="bukaNilai('baru','${j.key}')">${ico('plus', 13)} Tambah ${esc(j.label)}</button>` : ''}
         </div>`;
@@ -689,14 +841,16 @@ function blokDaftarPenilaian(rombel, mapel) {
     </div>`;
 }
 
-function blokLeger(rombel, mapel) {
-  const { kolom, baris, kktpMin } = hitungLeger(rombel, mapel);
+// Leger selalu ditampilkan PER ROMBEL — walau nilainya diisi sekali untuk
+// kelas gabungan — karena inilah yang dipindahkan ke RDM (per rombel).
+function blokLeger(kelas, mapel) {
+  const { kolom, baris } = hitungLeger(kelas, mapel);
   if (!baris.length) return '';
   if (!kolom.length) {
     return `<div class="card"><div class="empty">Belum ada penilaian. Tambahkan penilaian di atas untuk mulai mengisi nilai.</div></div>`;
   }
   const b = bobotNilai();
-  const angka = v => (v === null ? '–' : bulat(v));
+  const gabungan = kelas.rombel.length > 1;
   return `
     <div class="card">
       <div class="section-title" style="justify-content:space-between">
@@ -705,38 +859,51 @@ function blokLeger(rombel, mapel) {
       </div>
       <div class="hint" style="margin-bottom:8px">
         NA = ${b.formatif}% Formatif + ${b.sumatif}% Sumatif LM + ${b.sas}% SAS ·
-        batas tuntas KKTP ${esc(mapel)}: <b>${kktpMin}</b>.
+        batas tuntas KKTP ${esc(mapel)}: <b>${kktpUntuk(mapel)}</b>.
         Bobot &amp; KKTP diatur admin di menu Setelan — samakan dengan menu <b>Bobot</b> di RDM.
         Komponen yang belum dinilai tidak ikut dihitung.
+        ${gabungan ? 'Leger dipisah per rombel agar bisa disalin langsung ke template RDM.' : ''}
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
-        <button class="btn-ghost" onclick="salinKolom('na')">${ico('copy', 13)} Salin kolom NA</button>
-        <button class="btn-ghost" onclick="salinKolom('deskripsi')">${ico('copy', 13)} Salin kolom deskripsi</button>
-      </div>
-      <div class="table-wrap"><table class="tbl">
-        <tr><th>#</th><th>Nama</th><th class="num">F</th><th class="num">SLM</th><th class="num">SAS</th>
-            <th class="num">NA</th><th class="num">Predikat</th><th>Deskripsi</th></tr>
-        ${baris.map((r, i) => `<tr>
-          <td>${i + 1}</td>
-          <td>${esc(r.s.nama)}</td>
-          <td class="num">${angka(r.rf)}</td>
-          <td class="num">${angka(r.rs)}</td>
-          <td class="num">${angka(r.sas)}</td>
-          <td class="num" style="font-weight:900">${angka(r.na)}</td>
-          <td class="num">${r.predikat ? `<span class="predikat" style="background:${r.predikat.color}" title="${esc(r.predikat.label)}">${r.predikat.kode}</span>` : '–'}</td>
-          <td class="desk-cell">${esc(r.deskripsi) || '<span style="color:var(--muted)">–</span>'}</td>
-        </tr>`).join('')}
-      </table></div>
+      ${kelas.rombel.map(r => tabelLeger(r, mapel, gabungan)).join('')}
     </div>`;
+}
+
+function tabelLeger(rombel, mapel, tampilJudul) {
+  const { baris } = hitungLeger(kelasSatu(rombel), mapel);
+  const angka = v => (v === null ? '–' : bulat(v));
+  if (!baris.length) {
+    return tampilJudul
+      ? `<div class="grup-rombel">${esc(rombel)}</div><div class="empty">Belum ada siswa.</div>` : '';
+  }
+  return `
+    ${tampilJudul ? `<div class="grup-rombel">${esc(rombel)} <span class="hint">${baris.length} siswa</span></div>` : ''}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <button class="btn-ghost" onclick="salinKolom('na','${escArg(rombel)}')">${ico('copy', 13)} Salin kolom NA${tampilJudul ? ' ' + esc(rombel) : ''}</button>
+      <button class="btn-ghost" onclick="salinKolom('deskripsi','${escArg(rombel)}')">${ico('copy', 13)} Salin kolom deskripsi${tampilJudul ? ' ' + esc(rombel) : ''}</button>
+    </div>
+    <div class="table-wrap" style="margin-bottom:14px"><table class="tbl">
+      <tr><th>#</th><th>Nama</th><th class="num">F</th><th class="num">SLM</th><th class="num">SAS</th>
+          <th class="num">NA</th><th class="num">Predikat</th><th>Deskripsi</th></tr>
+      ${baris.map((r, i) => `<tr>
+        <td>${i + 1}</td>
+        <td>${esc(r.s.nama)}</td>
+        <td class="num">${angka(r.rf)}</td>
+        <td class="num">${angka(r.rs)}</td>
+        <td class="num">${angka(r.sas)}</td>
+        <td class="num" style="font-weight:900">${angka(r.na)}</td>
+        <td class="num">${r.predikat ? `<span class="predikat" style="background:${r.predikat.color}" title="${esc(r.predikat.label)}">${r.predikat.kode}</span>` : '–'}</td>
+        <td class="desk-cell">${esc(r.deskripsi) || '<span style="color:var(--muted)">–</span>'}</td>
+      </tr>`).join('')}
+    </table></div>`;
 }
 
 // ── Isi nilai satu kolom ──
 function bukaNilai(id, jenis) {
   const el = nilaiPage();
-  const { rombel } = nilaiCtx();
+  const { kelas } = nilaiCtx();
   const k = id === 'baru' ? null : nilaiList.find(x => x.id === id);
   nilaiInputState = {};
-  for (const s of siswaByRombel(rombel)) {
+  for (const s of siswaByKelas(kelas)) {
     const v = k ? num(k.nilai?.[s.id]) : null;
     nilaiInputState[s.id] = v === null ? '' : String(v);
   }
@@ -752,18 +919,19 @@ function jumlahTerisi() {
 
 function renderNilaiInput() {
   const el = nilaiPage();
-  const { rombel, mapel, open } = nilaiCtx();
+  const { kelas, mapel, open } = nilaiCtx();
   const baru = open === 'baru';
   const k = baru ? null : nilaiList.find(x => x.id === open);
   if (!baru && !k) { el.dataset.open = ''; renderNilaiIndex(); return; }
   const jenis = baru ? (el.dataset.jenis || 'formatif') : k.jenis;
   const j = NILAI_JENIS_MAP[jenis] || NILAI_JENIS[0];
-  const siswa = urutkanSiswa(siswaByRombel(rombel), sekolah.urutSiswa);
+  const siswa = siswaKelasUrut(kelas);
+  const gabungan = kelas.rombel.length > 1;
   el.innerHTML = `
     <div class="card card-sage">
       <div class="section-title" style="justify-content:space-between">
         <span>${ico(baru ? 'plus' : 'pencil', 15)} ${baru ? 'Penilaian Baru' : 'Ubah Penilaian'}</span>
-        <span class="badge-mini">${esc(rombel)} · ${esc(mapel)}</span>
+        <span class="badge-mini">${esc(kelas.label)} · ${esc(mapel)}</span>
       </div>
       <div class="input-wrap">
         <label>Jenis Penilaian</label>
@@ -783,16 +951,10 @@ function renderNilaiInput() {
         <span>${ico('star', 15)} Isian Nilai</span>
         <span class="badge-mini" id="nilai-terisi">${jumlahTerisi()}/${siswa.length} terisi</span>
       </div>
-      <div class="hint">Skala 0–100. Kosongkan bila siswa belum dinilai — nilai kosong tidak ikut dihitung.</div>
+      <div class="hint">Skala 0–100. Kosongkan bila siswa belum dinilai — nilai kosong tidak ikut dihitung.${
+        gabungan ? ' Diisi sekali untuk ' + esc(kelas.rombel.join(' + ')) + '; leger & ekspor tetap terpisah per rombel.' : ''}</div>
       <div style="margin:10px 0">
-        ${siswa.map((s, i) => `
-        <div class="absen-row">
-          <div style="width:22px;text-align:right;font-size:12px;font-weight:800;color:var(--muted)">${i + 1}</div>
-          <div class="absen-nama">${esc(s.nama)}<div class="absen-nisn">NISN ${esc(s.nisn || '-')}</div></div>
-          <input class="input nilai-inp" type="number" min="0" max="100" inputmode="numeric"
-            value="${esc(nilaiInputState[s.id] ?? '')}"
-            oninput="setNilaiInput('${s.id}',this.value)" onchange="normalNilai('${s.id}',this)"/>
-        </div>`).join('') || '<div class="empty">Belum ada data siswa untuk rombel ini.</div>'}
+        ${barisInputNilai(kelas) || '<div class="empty">Belum ada data siswa untuk kelas ini.</div>'}
       </div>
     </div>
 
@@ -800,6 +962,29 @@ function renderNilaiInput() {
       <button class="btn btn-gray" style="flex:1" onclick="tutupNilaiInput()">Batal</button>
       <button class="btn btn-sage" style="flex:2;padding:13px;font-size:14px" onclick="simpanNilaiKolom()">${ico('save', 15)} Simpan Nilai</button>
     </div>`;
+}
+
+// Daftar isian nilai, dikelompokkan per rombel pada kelas gabungan supaya
+// urutannya tetap sama dengan template RDM tiap rombel.
+function barisInputNilai(kelas) {
+  const gabungan = kelas.rombel.length > 1;
+  let no = 0;
+  return kelas.rombel.map(r => {
+    const anggota = urutkanSiswa(siswaByRombel(r), sekolah.urutSiswa);
+    if (!anggota.length) return '';
+    return (gabungan ? `<div class="grup-rombel">${esc(r)} <span class="hint">${anggota.length} siswa</span></div>` : '')
+      + anggota.map(s => {
+        no++;
+        return `
+        <div class="absen-row">
+          <div style="width:22px;text-align:right;font-size:12px;font-weight:800;color:var(--muted)">${no}</div>
+          <div class="absen-nama">${esc(s.nama)}<div class="absen-nisn">NISN ${esc(s.nisn || '-')}</div></div>
+          <input class="input nilai-inp" type="number" min="0" max="100" inputmode="numeric"
+            value="${esc(nilaiInputState[s.id] ?? '')}"
+            oninput="setNilaiInput('${s.id}',this.value)" onchange="normalNilai('${s.id}',this)"/>
+        </div>`;
+      }).join('');
+  }).join('');
 }
 
 function setNilaiInput(sid, val) {
@@ -830,7 +1015,7 @@ function tutupNilaiInput() {
 
 async function simpanNilaiKolom() {
   const el = nilaiPage();
-  const { rombel, mapel, open } = nilaiCtx();
+  const { kelas, mapel, open } = nilaiCtx();
   const nama = document.getElementById('nk-nama').value.trim();
   if (!nama) { showToast('Nama penilaian wajib diisi.', false); return; }
   const lama = open === 'baru' ? null : nilaiList.find(x => x.id === open);
@@ -842,10 +1027,14 @@ async function simpanNilaiKolom() {
   }
   const now = Date.now();
   const data = {
-    guruId: currentUser.id, mapel, rombel,
+    guruId: currentUser.id, mapel,
+    // Sama seperti jurnal: label pengisian + rombel yang tercakup, agar leger
+    // dan rekap tetap bisa dipecah per rombel.
+    rombel: kelas.label,
+    rombelGabung: [...kelas.rombel],
     tahunPelajaran: sekolah.tahunPelajaran, semester: sekolah.semester,
     jenis, nama, nilai,
-    urut: lama?.urut ?? kolomNilai(rombel, mapel).filter(x => x.jenis === jenis).length + 1,
+    urut: lama?.urut ?? kolomNilai(kelas, mapel).filter(x => x.jenis === jenis).length + 1,
     createdAt: lama?.createdAt || now,
     updatedAt: now,
   };
@@ -868,8 +1057,10 @@ async function simpanNilaiKolom() {
 function hapusNilai(id) {
   const k = nilaiList.find(x => x.id === id);
   if (!k) return;
+  const cakupan = rombelDoc(k);
   confirmAction('Hapus Penilaian',
-    `Hapus penilaian <b>${esc(k.nama)}</b> beserta seluruh nilai siswa di dalamnya? Tindakan ini tidak bisa dibatalkan.`,
+    `Hapus penilaian <b>${esc(k.nama)}</b> beserta seluruh nilai siswa di dalamnya${
+      cakupan.length > 1 ? ` (mencakup <b>${esc(cakupan.join(' + '))}</b>)` : ''}? Tindakan ini tidak bisa dibatalkan.`,
     async () => {
       showLoading('Menghapus...');
       try {
@@ -900,56 +1091,67 @@ async function salinTeks(teks, pesan) {
   } catch (e) { console.error(e); showToast('Gagal menyalin ke papan klip.', false); }
 }
 
-function salinKolom(id) {
-  const { rombel, mapel } = nilaiCtx();
-  const { baris } = hitungLeger(rombel, mapel);
+// Salinan selalu untuk SATU rombel — template RDM disusun per rombel.
+function salinKolom(id, rombel) {
+  const { kelas, mapel } = nilaiCtx();
+  const target = rombel || kelas?.rombel[0];
+  if (!target) { showToast('Pilih kelas terlebih dahulu.', false); return; }
+  const { baris } = hitungLeger(kelasSatu(target), mapel);
   if (!baris.length) { showToast('Belum ada siswa.', false); return; }
-  if (id === 'na') { salinTeks(baris.map(r => bulat(r.na) ?? '').join('\n'), 'Kolom NA disalin.'); return; }
-  if (id === 'deskripsi') { salinTeks(baris.map(r => r.deskripsi).join('\n'), 'Kolom deskripsi disalin.'); return; }
+  const suffix = kelas.rombel.length > 1 ? ` (${target})` : '';
+  if (id === 'na') { salinTeks(baris.map(r => bulat(r.na) ?? '').join('\n'), `Kolom NA${suffix} disalin.`); return; }
+  if (id === 'deskripsi') { salinTeks(baris.map(r => r.deskripsi).join('\n'), `Kolom deskripsi${suffix} disalin.`); return; }
   const k = nilaiList.find(x => x.id === id);
   if (!k) return;
-  salinTeks(baris.map(r => num(k.nilai?.[r.s.id]) ?? '').join('\n'), `Kolom "${k.nama}" disalin.`);
+  salinTeks(baris.map(r => num(k.nilai?.[r.s.id]) ?? '').join('\n'), `Kolom "${k.nama}"${suffix} disalin.`);
 }
 
 async function exportNilai() {
-  const { rombel, mapel } = nilaiCtx();
-  if (!rombel || !mapel) { showToast('Pilih rombel dan mapel terlebih dahulu.', false); return; }
+  const { kelas, mapel } = nilaiCtx();
+  if (!kelas || !mapel) { showToast('Pilih kelas dan mapel terlebih dahulu.', false); return; }
   showLoading('Menyiapkan ekspor...');
   try {
     const XLSX = await ensureXLSX();
-    const { kolom, grup, baris } = hitungLeger(rombel, mapel);
-    if (!kolom.length) { hideLoading(); showToast('Belum ada penilaian untuk diekspor.', false); return; }
+    if (!kolomNilai(kelas, mapel).length) { hideLoading(); showToast('Belum ada penilaian untuk diekspor.', false); return; }
     const wb = XLSX.utils.book_new();
+    const gabungan = kelas.rombel.length > 1;
     const identitas = (r, i) => ({ No: i + 1, NISN: r.s.nisn || '', Nama: r.s.nama });
-    for (const j of NILAI_JENIS) {
-      const list = grup[j.key] || [];
-      if (!list.length) continue;
-      // Nama kolom harus unik agar tidak saling menimpa di sheet.
-      const dipakai = new Set();
-      const judul = list.map(k => {
-        let l = k.nama, n = 2;
-        while (dipakai.has(l)) l = `${k.nama} (${n++})`;
-        dipakai.add(l);
-        return l;
-      });
-      const rows = baris.map((r, i) => {
-        const o = identitas(r, i);
-        list.forEach((k, c) => { o[judul[c]] = num(k.nilai?.[r.s.id]) ?? ''; });
-        return o;
-      });
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), j.sheet);
+    // Satu set lembar per rombel — siap disalin ke template RDM masing-masing.
+    for (const rombel of kelas.rombel) {
+      const { grup, baris } = hitungLeger(kelasSatu(rombel), mapel);
+      if (!baris.length) continue;
+      const namaSheet = (dasar) => (gabungan ? `${dasar} ${rombel}` : dasar).slice(0, 31);
+      for (const j of NILAI_JENIS) {
+        const list = grup[j.key] || [];
+        if (!list.length) continue;
+        // Nama kolom harus unik agar tidak saling menimpa di sheet.
+        const dipakai = new Set();
+        const judul = list.map(k => {
+          let l = k.nama, n = 2;
+          while (dipakai.has(l)) l = `${k.nama} (${n++})`;
+          dipakai.add(l);
+          return l;
+        });
+        const rows = baris.map((r, i) => {
+          const o = identitas(r, i);
+          list.forEach((k, c) => { o[judul[c]] = num(k.nilai?.[r.s.id]) ?? ''; });
+          return o;
+        });
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), namaSheet(j.sheet));
+      }
+      const leger = baris.map((r, i) => ({
+        ...identitas(r, i),
+        'Rata Formatif': bulat(r.rf) ?? '',
+        'Rata Sumatif LM': bulat(r.rs) ?? '',
+        'SAS': r.sas ?? '',
+        'Nilai Akhir': bulat(r.na) ?? '',
+        'Predikat': r.predikat?.label || '',
+        'Deskripsi': r.deskripsi,
+      }));
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(leger), namaSheet('Leger'));
     }
-    const leger = baris.map((r, i) => ({
-      ...identitas(r, i),
-      'Rata Formatif': bulat(r.rf) ?? '',
-      'Rata Sumatif LM': bulat(r.rs) ?? '',
-      'SAS': r.sas ?? '',
-      'Nilai Akhir': bulat(r.na) ?? '',
-      'Predikat': r.predikat?.label || '',
-      'Deskripsi': r.deskripsi,
-    }));
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(leger), 'Leger');
-    xlsxDownload(wb, `nilai_${rombel}_${mapel.replace(/\W+/g, '')}_${sekolah.semester}.xlsx`);
+    if (!wb.SheetNames.length) { hideLoading(); showToast('Belum ada data siswa untuk diekspor.', false); return; }
+    xlsxDownload(wb, `nilai_${kelas.label.replace(/\+/g, '-')}_${mapel.replace(/\W+/g, '')}_${sekolah.semester}.xlsx`);
     showToast('Nilai diekspor.');
   } catch (e) { console.error(e); showToast('Gagal ekspor.', false); }
   hideLoading();
@@ -1494,14 +1696,30 @@ async function exportJurnalBulan() {
       .sort((a, b) => a.tanggal.localeCompare(b.tanggal) || (a.guruNama || '').localeCompare(b.guruNama || ''));
     if (!list.length) { hideLoading(); showToast('Tidak ada jurnal pada bulan ini.', false); return; }
     const kbcLabel = k => KBC_VALUES.find(v => v.key === k)?.label || k;
-    const rows = list.map(j => ({
-      Tanggal: j.tanggal, 'Jam ke': j.jamKe || '', Guru: j.guruNama, Rombel: j.rombel,
-      Mapel: j.mapel, Materi: j.materi, 'Tujuan Pembelajaran': j.tujuan || '',
-      Kegiatan: j.kegiatan || '', Metode: j.metode || '', Asesmen: j.asesmen || '',
-      'Nilai KBC': (j.kbc || []).map(kbcLabel).join(', '), 'Penerapan KBC': j.kbcCatatan || '',
-      Refleksi: j.refleksi || '',
-      Hadir: j.rekap?.H ?? 0, Sakit: j.rekap?.S ?? 0, Izin: j.rekap?.I ?? 0, Alpa: j.rekap?.A ?? 0,
-    }));
+    // Satu pertemuan kelas gabungan menjadi satu baris per rombel, dengan
+    // kehadiran masing-masing — pengisian sekali, laporan tetap terpisah.
+    const rows = list.flatMap(j => {
+      const rombel = rombelDoc(j);
+      const rekapR = j.rekapRombel || rekapPerRombel(j.absen, rombel);
+      const isi = {
+        Mapel: j.mapel, Materi: j.materi, 'Tujuan Pembelajaran': j.tujuan || '',
+        Kegiatan: j.kegiatan || '', Metode: j.metode || '', Asesmen: j.asesmen || '',
+        'Nilai KBC': (j.kbc || []).map(kbcLabel).join(', '), 'Penerapan KBC': j.kbcCatatan || '',
+        Refleksi: j.refleksi || '',
+      };
+      return (rombel.length ? rombel : ['']).map(r => {
+        const k = (rombel.length > 1 ? rekapR[r] : j.rekap) || {};
+        return {
+          Tanggal: j.tanggal, 'Jam ke': j.jamKe || '', Guru: j.guruNama,
+          Rombel: r || j.rombel || '',
+          'Kelas Pengisian': rombel.length > 1 ? j.rombel : '',
+          ...isi,
+          Hadir: k.H ?? 0, Sakit: k.S ?? 0, Izin: k.I ?? 0, Alpa: k.A ?? 0,
+        };
+      });
+    }).sort((a, b) => a.Tanggal.localeCompare(b.Tanggal)
+      || String(a.Guru).localeCompare(String(b.Guru), 'id')
+      || cmpRombel(a.Rombel, b.Rombel));
     const ws = XLSX.utils.json_to_sheet(rows);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Jurnal ' + ym);
@@ -1618,7 +1836,9 @@ async function hitungRekapData(pageId, guruOnly) {
   const rombel = el.dataset.rombel;
   const mapel = el.dataset.mapel || '';
   let list = await jurnalByRange(ym + '-01', ym + '-31');
-  list = list.filter(j => j.rombel === rombel);
+  // Jurnal kelas gabungan (mis. 7A+7B) ikut terhitung pada rekap tiap
+  // rombelnya; statistik di bawah hanya menghitung siswa rombel ini.
+  list = list.filter(j => docPunyaRombel(j, rombel));
   if (mapel) list = list.filter(j => j.mapel === mapel);
   if (guruOnly) list = list.filter(j => j.guruId === currentUser.id);
   const siswa = siswaByRombel(rombel);
@@ -1695,21 +1915,26 @@ function namaGuru(guruId) {
   return guruList.find(g => g.id === guruId)?.nama || '(guru sudah dihapus)';
 }
 
-// Satu baris per kombinasi guru × mapel × rombel.
+// Satu baris per kombinasi guru × mapel × rombel. Penilaian kelas gabungan
+// (7A+7B) dihitung pada baris kedua rombelnya, masing-masing hanya dengan
+// siswa rombel itu — pengisian sekali, pemantauan tetap per rombel.
 function rekapKelengkapan() {
   const peta = new Map();
   for (const n of nilaiAktif()) {
-    const k = `${n.guruId}|${n.mapel}|${n.rombel}`;
-    if (!peta.has(k)) {
-      peta.set(k, {
-        kunci: k, guruId: n.guruId, mapel: n.mapel, rombel: n.rombel,
-        formatif: 0, sumatif: 0, sas: 0, terisi: 0, sel: 0,
-      });
+    for (const rombel of rombelDoc(n)) {
+      const k = `${n.guruId}|${n.mapel}|${rombel}`;
+      if (!peta.has(k)) {
+        peta.set(k, {
+          kunci: k, guruId: n.guruId, mapel: n.mapel, rombel,
+          formatif: 0, sumatif: 0, sas: 0, terisi: 0, sel: 0,
+        });
+      }
+      const r = peta.get(k);
+      if (r[n.jenis] !== undefined) r[n.jenis]++;
+      const anggota = siswaByRombel(rombel);
+      r.sel += anggota.length;
+      r.terisi += anggota.filter(s => num(n.nilai?.[s.id]) !== null).length;
     }
-    const r = peta.get(k);
-    if (r[n.jenis] !== undefined) r[n.jenis]++;
-    r.sel += siswaByRombel(n.rombel).length;
-    r.terisi += Object.values(n.nilai || {}).filter(v => num(v) !== null).length;
   }
   return [...peta.values()]
     .map(r => ({ ...r, guru: namaGuru(r.guruId), persen: r.sel ? Math.round(r.terisi / r.sel * 100) : 0 }))
@@ -1720,7 +1945,7 @@ function rekapKelengkapan() {
 
 // Leger satu rombel lintas mapel: NA tiap mapel per siswa.
 function legerRombel(rombel) {
-  const list = nilaiAktif().filter(n => n.rombel === rombel);
+  const list = nilaiAktif().filter(n => docPunyaRombel(n, rombel));
   const mapelSet = [...new Set(list.map(n => n.mapel))].sort((a, b) => a.localeCompare(b, 'id'));
   const siswa = urutkanSiswa(siswaByRombel(rombel), sekolah.urutSiswa);
   const baris = siswa.map(s => {
@@ -1826,7 +2051,7 @@ function renderDetailNilai(kunci) {
   const body = document.getElementById('a-rekap-body');
   const [guruId, mapel, rombel] = kunci.split('|');
   const kolom = nilaiAktif()
-    .filter(n => n.guruId === guruId && n.mapel === mapel && n.rombel === rombel)
+    .filter(n => n.guruId === guruId && n.mapel === mapel && docPunyaRombel(n, rombel))
     .sort((a, b) => NILAI_JENIS.findIndex(j => j.key === a.jenis) - NILAI_JENIS.findIndex(j => j.key === b.jenis)
       || (a.urut || 0) - (b.urut || 0));
   const siswa = urutkanSiswa(siswaByRombel(rombel), sekolah.urutSiswa);
@@ -1975,6 +2200,18 @@ function renderASet() {
     <div class="card">
       <div class="section-title">${ico('tag',15)} Daftar Rombel</div>
       <div class="hint" style="margin-bottom:8px">Klik nama rombel untuk mengelola: ganti nama, atur anggota, dan migrasi siswa ke rombel setingkat. Perubahan langsung tersimpan otomatis; menghapus rombel tidak menghapus data siswanya.</div>
+      <label style="display:flex;gap:9px;align-items:flex-start;padding:10px 12px;margin-bottom:10px;
+        border:1px solid var(--border);border-radius:12px;cursor:pointer">
+        <input type="checkbox" ${gabungAktif() ? 'checked' : ''} onchange="setGabungRombel(this.checked)" style="margin-top:2px"/>
+        <span>
+          <span style="font-size:13px;font-weight:800">Gabungkan rombel setingkat saat pengisian</span>
+          <span class="hint" style="display:block;margin-top:3px">
+            Dipakai bila rombel setingkat belajar dalam satu ruang. Guru mengisi jurnal, absensi,
+            dan nilai <b>sekali</b> untuk ${esc(daftarKelasTeks() || '7A+7B, 8A+8B, …')} —
+            laporan, rekap, dan ekspor tetap <b>dipisah per rombel</b>.
+          </span>
+        </span>
+      </label>
       <div class="kbc-wrap" style="margin-bottom:10px">
         ${aSetState.rombel.map(r => `<div class="chip on"><span style="cursor:pointer" title="Kelola rombel" onclick="kelolaRombel('${escArg(r)}')">${esc(r)}</span><span style="cursor:pointer;display:inline-flex" title="Hapus" onclick="setDelItem('rombel','${escArg(r)}')">${ico('x', 13)}</span></div>`).join('') || '<span class="hint">Belum ada rombel.</span>'}
       </div>
@@ -2003,6 +2240,29 @@ function renderASet() {
       <button class="btn btn-teal" style="width:100%" onclick="simpanAdmin()">Simpan Akun Admin</button>
     </div>`;
   getAdminDoc().then(adm => { document.getElementById('adm-user').value = adm?.username || 'admin'; }).catch(() => {});
+}
+
+// Ringkasan kelas gabungan untuk ditampilkan di Setelan, mis. "7A+7B · 8A+8B".
+function daftarKelasTeks() {
+  return kelasDariRombel(aSetState?.rombel || rombelList(), true)
+    .map(k => k.label).join(' · ');
+}
+
+// Penggabungan hanya mengubah cara pengisian; dokumen lama tidak ikut berubah,
+// jadi mengaktif/menonaktifkannya aman kapan saja.
+async function setGabungRombel(on) {
+  showLoading('Menyimpan...');
+  try {
+    await saveSekolahDoc({ gabungRombel: !!on });
+    showToast(on
+      ? 'Pengisian digabung per tingkat. Laporan tetap dipisah per rombel.'
+      : 'Pengisian kembali per rombel.');
+  } catch (e) {
+    console.error(e);
+    showToast('Gagal menyimpan perubahan. Periksa koneksi.', false);
+  }
+  hideLoading();
+  renderASet();
 }
 
 // Placeholder KKTP tiap mapel mengikuti angka default yang sedang diketik,
@@ -2122,8 +2382,6 @@ let mrRombel = null;
 let mrSel = new Set();     // anggota terpilih (untuk dipindahkan)
 let mrAddSel = new Set();  // calon dari rombel lain (untuk dimasukkan)
 let mrAddSrc = '';         // rombel sumber pada bagian "masukkan siswa"
-
-function tingkatOf(r) { const n = parseInt(r); return isNaN(n) ? null : n; }
 
 function kelolaRombel(r) {
   mrRombel = r; mrSel = new Set(); mrAddSel = new Set(); mrAddSrc = '';
@@ -2297,7 +2555,7 @@ Object.assign(window, {
   aRekapTab, bukaDetailNilai, tutupDetailNilai, exportRekapNilai,
   nilaiFilter, bukaNilai, setNilaiInput, normalNilai, tutupNilaiInput,
   simpanNilaiKolom, hapusNilai, salinKolom, exportNilai,
-  setAddItem, setDelItem, simpanSekolah, simpanAdmin, setKktpPlaceholder,
+  setAddItem, setDelItem, simpanSekolah, simpanAdmin, setKktpPlaceholder, setGabungRombel,
   kelolaRombel, renameRombel, migrasiSiswa, masukkanSiswa,
   mrToggle, mrAddToggle, mrPilihSemua, mrSetSumber,
   closeModal, openModal,
