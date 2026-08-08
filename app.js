@@ -49,6 +49,7 @@ import {
 import { showLoading, hideLoading, showToast, showScreen, openModal, closeModal, togglePw } from "./js/ui-helpers.js";
 import { ico, initIcons } from "./js/icons.js";
 import { buildJurnalBulananPDF, namaFilePDF, namaBulan, pdfDownload } from "./js/pdf-jurnal.js";
+import { buildFormulirPDF, namaFileFormulir } from "./js/pdf-form.js";
 
 // ── STATE ──
 let loginRole = 'guru';
@@ -1659,6 +1660,7 @@ async function renderAJurnal() {
         <span style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn-ghost" onclick="exportJurnalBulan()">${ico('download',13)} Excel sebulan</button>
           <button class="btn-ghost" onclick="exportPdfJurnalGuru()">${ico('download',13)} PDF per guru</button>
+          <button class="btn-ghost" onclick="openModalFormulir()">${ico('printer',13)} Formulir cetak</button>
         </span>
       </div>
       <div class="filter-row">
@@ -1768,6 +1770,59 @@ function exportPdfJurnalGuru() {
   const ym = (el.dataset.tgl || dk()).slice(0, 7);
   return exportPdfJurnalBulanan(guru, ym, async () =>
     (await jurnalByRange(ym + '-01', ym + '-31')).filter(j => j.guruId === guruId));
+}
+
+// ═══════════════════ ADMIN: FORMULIR CETAK (ISIAN MANUAL) ═══════════════════
+// Untuk guru yang tidak bisa online: cetak sekali di awal semester, isi tangan,
+// lalu disalin ke aplikasi saat ada koneksi. Identitas guru & mapel dikosongkan
+// supaya satu berkas cukup difotokopi untuk semua guru; nama siswa tetap
+// tercetak karena itulah bagian yang paling repot ditulis ulang.
+let mfRombel = new Set();
+
+function openModalFormulir() {
+  mfRombel = new Set(rombelListSiswa());
+  renderMfRombel();
+  openModal('modal-formulir');
+}
+
+function renderMfRombel() {
+  const daftar = rombelListSiswa();
+  document.getElementById('mf-rombel').innerHTML = daftar.length
+    ? daftar.map(r => `<div class="chip ${mfRombel.has(r) ? 'on' : ''}" onclick="mfToggleRombel('${escArg(r)}')">
+        ${esc(r)} <span class="hint">${siswaByRombel(r).length}</span></div>`).join('')
+    : '<span class="hint">Belum ada rombel.</span>';
+  const total = [...mfRombel].reduce((a, r) => a + siswaByRombel(r).length, 0);
+  document.getElementById('mf-info').textContent = mfRombel.size
+    ? `${mfRombel.size} lembar daftar hadir · ${total} nama siswa tercetak.`
+    : 'Tidak ada rombel dipilih — berkas hanya berisi lembar jurnal kosong.';
+}
+
+function mfToggleRombel(r) {
+  mfRombel.has(r) ? mfRombel.delete(r) : mfRombel.add(r);
+  renderMfRombel();
+}
+
+async function unduhFormulirPDF() {
+  const jepit = (id, min, max, fallback) => {
+    const v = num(document.getElementById(id).value);
+    return v === null ? fallback : Math.min(max, Math.max(min, Math.round(v)));
+  };
+  const halamanJurnal = jepit('mf-halaman', 1, 30, 6);
+  const kolomPertemuan = jepit('mf-kolom', 4, 30, 20);
+  showLoading('Menyiapkan formulir...');
+  try {
+    const rombel = rombelListSiswa()
+      .filter(r => mfRombel.has(r))
+      .map(r => ({ rombel: r, siswa: urutkanSiswa(siswaByRombel(r), sekolah.urutSiswa) }));
+    const pdf = await buildFormulirPDF({ sekolah, halamanJurnal, kolomPertemuan, rombel });
+    pdfDownload(pdf, namaFileFormulir(sekolah));
+    closeModal('modal-formulir');
+    showToast('Formulir cetak berhasil dibuat.');
+  } catch (e) {
+    console.error(e);
+    showToast('Gagal membuat formulir. Periksa koneksi internet.', false);
+  }
+  hideLoading();
 }
 
 // ═══════════════════ REKAP ABSENSI (guru & admin) ═══════════════════
@@ -2551,6 +2606,7 @@ Object.assign(window, {
   openModalUpload, downloadTemplateSiswa, prosesUploadSiswa,
   aJurnalTgl, aJurnalGuru, exportJurnalBulan,
   exportPdfRiwayat, exportPdfJurnalGuru,
+  openModalFormulir, mfToggleRombel, unduhFormulirPDF,
   rekapSet, exportRekap,
   aRekapTab, bukaDetailNilai, tutupDetailNilai, exportRekapNilai,
   nilaiFilter, bukaNilai, setNilaiInput, normalNilai, tutupNilaiInput,
