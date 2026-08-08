@@ -215,6 +215,32 @@
   </div>
 </div>
 
+<!-- Modal formulir cetak (isian manual untuk guru offline) -->
+<div id="modal-formulir" class="modal">
+  <div class="modal-box modal-lg">
+    <div class="modal-title"><span data-ico="printer" data-size="17"></span> Formulir Cetak</div>
+    <div class="hint" style="margin-bottom:12px">
+      Berkas PDF siap cetak untuk guru yang mengisi jurnal secara manual: <b>lembar jurnal kosong</b>
+      plus <b>daftar hadir per rombel</b> dengan nama siswa sudah tercetak.
+      Nama guru &amp; mata pelajaran sengaja dikosongkan agar satu berkas bisa difotokopi untuk semua guru.
+    </div>
+    <div class="grid2">
+      <div class="input-wrap"><label>Halaman Jurnal per Guru</label>
+        <input id="mf-halaman" class="input" type="number" min="1" max="30" value="6" inputmode="numeric"/></div>
+      <div class="input-wrap"><label>Kolom Pertemuan (daftar hadir)</label>
+        <input id="mf-kolom" class="input" type="number" min="4" max="30" value="20" inputmode="numeric"/></div>
+    </div>
+    <div class="input-wrap" style="margin-bottom:4px"><label>Rombel yang Disertakan</label></div>
+    <div class="hint" style="margin-bottom:8px">Ketuk untuk memilih. Tiap rombel mendapat lembar daftar hadir sendiri.</div>
+    <div id="mf-rombel" class="kbc-wrap" style="margin-bottom:12px"></div>
+    <div id="mf-info" class="hint"></div>
+    <div class="modal-btns">
+      <button class="btn btn-gray" onclick="closeModal('modal-formulir')">Batal</button>
+      <button class="btn btn-sage" onclick="unduhFormulirPDF()">Unduh PDF</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal detail jurnal -->
 <div id="modal-jurnal" class="modal">
   <div class="modal-box modal-lg">

@@ -80,6 +80,7 @@ predikat yang dilihat guru selalu sejalan.
 - **Kelola data siswa** sederhana (Nama, Rombel, NISN): tambah manual atau **upload Excel** (template disediakan), hapus per siswa atau per rombel.
 - **Monitor jurnal** semua guru per tanggal, dengan dua ekspor: **Excel sebulan** (jurnal semua guru) dan **PDF per guru** (laporan bulanan guru terpilih, format sama seperti yang dicetak guru).
 - **Rekap** dua tab: **Absensi** seluruh rombel, dan **Nilai** (lihat di bawah). Keduanya bisa diekspor ke Excel.
+- **Formulir cetak** untuk guru yang tidak bisa online — lihat bagian di bawah.
 - **Pengaturan**: identitas madrasah, tahun pelajaran/semester, kota & nama/NIP kepala madrasah (dipakai pada kop dan kolom tanda tangan PDF), **pengaturan penilaian** (batas tuntas KKTP default + per mapel, bobot Nilai Akhir, urutan siswa pada ekspor), daftar rombel + **penggabungan rombel setingkat saat pengisian**, daftar mapel, akun admin.
 
 #### Rekap Nilai (tab Nilai di menu Rekap admin)
@@ -99,12 +100,30 @@ predikat yang dilihat guru selalu sejalan.
 Rekap ini hanya mencakup tahun pelajaran & semester yang sedang berjalan, sama
 seperti menu Nilai milik guru.
 
+#### Formulir cetak — untuk guru yang tidak bisa online
+
+Tombol **Formulir cetak** di menu Monitor Jurnal menghasilkan satu berkas PDF
+siap fotokopi untuk dipakai sepanjang semester:
+
+- **Lembar jurnal kosong** (A4 landscape) — kolom sama dengan jurnal digital,
+  baris dibuat tinggi agar nyaman ditulis tangan, dilengkapi legenda kode KBC
+  (1–5) sehingga guru cukup menulis angkanya. Jumlah halaman ditentukan admin
+  dan hasilnya **pas** sebanyak itu, dengan blok tanda tangan di halaman terakhir.
+- **Lembar daftar hadir per rombel** — **nama siswa sudah tercetak** (bagian
+  yang paling merepotkan bila ditulis ulang), dengan kolom pertemuan kosong
+  (jumlah kolom diatur admin) plus kolom jumlah H/S/I/A.
+
+Nama guru dan mata pelajaran sengaja **dikosongkan** (titik-titik) agar satu
+berkas cukup difotokopi untuk semua guru; identitas madrasah, tahun pelajaran,
+semester, dan nama kepala madrasah tetap tercetak otomatis. Isian manual ini
+nantinya tinggal disalin ke aplikasi saat guru mendapat koneksi.
+
 ## Teknologi
 - HTML/CSS/JavaScript murni (tanpa build step) — bisa dihosting di GitHub Pages.
 - **Firebase Firestore** sebagai basis data (koleksi berawalan `jm_`).
 - PWA: bisa dipasang di HP (Android/iOS) dan desktop.
 - SheetJS (dimuat lazy) untuk template/upload/ekspor Excel.
-- jsPDF + jsPDF-AutoTable (dimuat lazy, hanya saat tombol ekspor PDF ditekan) untuk laporan jurnal bulanan PDF — A4 landscape.
+- jsPDF + jsPDF-AutoTable (dimuat lazy, hanya saat tombol ekspor PDF ditekan) untuk laporan jurnal bulanan dan formulir cetak — A4 landscape.
 
 ## Struktur Data Firestore
 

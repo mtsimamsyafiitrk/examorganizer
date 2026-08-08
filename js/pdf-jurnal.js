@@ -12,7 +12,7 @@ const CDN_JSPDF = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.j
 const CDN_AUTOTABLE = 'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js';
 
 // Warna kop & header tabel (sage, mengikuti tema aplikasi).
-const SAGE = [90, 155, 134];
+export const SAGE = [90, 155, 134];
 
 function loadScript(src) {
   return new Promise((res, rej) => {
@@ -43,7 +43,7 @@ export function ensurePDF() {
 // Font bawaan jsPDF memakai WinAnsi. Guru sering menyalin teks dari Word yang
 // mengandung kutip/strip "pintar" — ganti ke padanan ASCII agar tidak jadi
 // karakter aneh di PDF.
-function wa(s) {
+export function wa(s) {
   return String(s ?? '')
     .replace(/[‘’‛]/g, "'")
     .replace(/[“”]/g, '"')
