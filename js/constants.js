@@ -97,6 +97,9 @@ export const DEFAULT_SEKOLAH = {
   kktpMapel: {},
   bobot: { formatif: 0, sumatif: 60, sas: 40 },
   urutSiswa: "nama",
+  // Rombel setingkat belajar di satu ruang → guru cukup mengisi sekali untuk
+  // 7A+7B, 8A+8B, dst. Laporan & rekap tetap dipisah per rombel.
+  gabungRombel: true,
   rombel: ["7A", "7B", "8A", "8B", "9A", "9B"],
   mapel: [
     "Al-Qur'an Hadis", "Akidah Akhlak", "Fikih", "Sejarah Kebudayaan Islam",

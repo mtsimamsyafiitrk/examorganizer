@@ -81,7 +81,7 @@
           <div class="input-wrap"><label>Jam ke</label><input id="j-jamke" class="input" placeholder="cth: 1-2"/></div>
         </div>
         <div class="grid2">
-          <div class="input-wrap"><label>Rombel / Kelas</label><select id="j-rombel" class="input" onchange="renderAbsenList()"></select></div>
+          <div class="input-wrap"><label>Kelas / Rombel</label><select id="j-rombel" class="input" onchange="renderAbsenList()"></select></div>
           <div class="input-wrap"><label>Mata Pelajaran</label><select id="j-mapel" class="input"></select></div>
         </div>
         <div class="input-wrap"><label>Materi / Topik Pembelajaran</label><input id="j-materi" class="input" placeholder="Bab / elemen / topik yang diajarkan"/></div>
@@ -102,7 +102,7 @@
 
       <div class="card">
         <div class="section-title"><span data-ico="check-square"></span> Absensi Siswa <span id="absen-counter" class="badge-mini"></span></div>
-        <div class="hint">Pilih rombel di atas, lalu tandai status tiap siswa. Default: Hadir.</div>
+        <div class="hint">Pilih kelas di atas, lalu tandai status tiap siswa. Default: Hadir. Bila rombel setingkat digabung (mis. 7A+7B), daftarnya tampil sekali dengan pemisah per rombel — rekap absensi tetap terpisah.</div>
         <div style="display:flex;gap:8px;margin:10px 0">
           <button class="btn-ghost" onclick="setSemuaAbsen('H')"><span data-ico="check" data-size="14"></span> Semua Hadir</button>
         </div>

@@ -53,6 +53,51 @@ export function cmpNama(a, b) {
   return String(a.nama).localeCompare(String(b.nama), 'id');
 }
 
+// ── KELAS GABUNGAN ──
+// Rombel setingkat (7A & 7B) belajar di satu ruang, jadi guru cukup mengisi
+// jurnal/absensi/nilai SEKALI untuk keduanya. Satu "kelas" = satu unit
+// pengisian yang mencakup satu atau beberapa rombel. Laporan tetap dipecah
+// per rombel — lihat rombelDoc()/docPunyaRombel().
+
+// Tingkat dari nama rombel: "7A" → 7, "10B" → 10. null bila tanpa angka depan.
+export function tingkatOf(r) {
+  const n = parseInt(r);
+  return isNaN(n) ? null : n;
+}
+
+// Label satu kelas: ["7A","7B"] → "7A+7B", ["7A"] → "7A".
+export function labelKelas(rombel) {
+  return [...rombel].sort(cmpRombel).join('+');
+}
+
+// Kelompokkan daftar rombel menjadi daftar kelas pengisian.
+// gabung=false → tiap rombel berdiri sendiri (perilaku lama).
+// Rombel tanpa angka depan selalu berdiri sendiri (tingkatnya tak diketahui).
+export function kelasDariRombel(list, gabung) {
+  const rs = [...new Set(list)].filter(Boolean).sort(cmpRombel);
+  const kelas = (rombel) => ({ key: labelKelas(rombel), label: labelKelas(rombel), rombel });
+  if (!gabung) return rs.map(r => kelas([r]));
+  const peta = new Map();
+  for (const r of rs) {
+    const t = tingkatOf(r);
+    const k = t === null ? `#${r}` : `T${t}`;
+    if (!peta.has(k)) peta.set(k, []);
+    peta.get(k).push(r);
+  }
+  return [...peta.values()].map(kelas);
+}
+
+// Daftar rombel yang tercakup satu dokumen jurnal/nilai. Dokumen lama (tanpa
+// rombelGabung) tetap terbaca sebagai satu rombel.
+export function rombelDoc(d) {
+  const g = (d?.rombelGabung || []).filter(Boolean);
+  return g.length ? [...g].sort(cmpRombel) : (d?.rombel ? [d.rombel] : []);
+}
+
+export function docPunyaRombel(d, r) {
+  return rombelDoc(d).includes(r);
+}
+
 // Hitung rekap {H,S,I,A} dari objek absen {siswaId: status}.
 export function hitungRekap(absen) {
   const r = { H: 0, S: 0, I: 0, A: 0 };

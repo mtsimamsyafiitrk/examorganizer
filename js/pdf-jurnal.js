@@ -6,7 +6,7 @@
 // SheetJS untuk ekspor Excel) supaya tidak membebani muat awal aplikasi.
 
 import { MONTHS, DF, KBC_VALUES } from "./constants.js";
-import { dk, fmtTanggal } from "./utils.js";
+import { dk, fmtTanggal, rombelDoc } from "./utils.js";
 
 const CDN_JSPDF = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js';
 const CDN_AUTOTABLE = 'https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js';
@@ -165,11 +165,20 @@ export async function buildJurnalBulananPDF({ sekolah, guru, ym, list }) {
       (j.kbc || []).map(kbcLabel).join(', '),
       j.kbcCatatan ? wa(j.kbcCatatan) : '',
     ].filter(Boolean).join('\n') || '-';
-    const r = j.rekap || {};
+    // Kelas gabungan (7A+7B) diisi sekali, tetapi kehadirannya dicetak
+    // terpisah: tiap rombel satu baris di dalam sel — nama rombel dan angka
+    // H/S/I/A sejajar, sehingga jumlah pertemuan tetap apa adanya.
+    const rombel = rombelDoc(j);
+    const gabungan = rombel.length > 1;
+    const rekapR = j.rekapRombel || {};
+    const sel = (kunci) => gabungan
+      ? rombel.map(r => rekapR[r]?.[kunci] ?? 0).join('\n')
+      : (j.rekap?.[kunci] ?? 0);
     return [
-      i + 1, tglSel(j.tanggal), wa(j.jamKe || '-'), wa(j.rombel || '-'), wa(j.mapel || '-'),
+      i + 1, tglSel(j.tanggal), wa(j.jamKe || '-'),
+      wa(rombel.join('\n') || j.rombel || '-'), wa(j.mapel || '-'),
       materi, kegiatan, kbc,
-      r.H ?? 0, r.S ?? 0, r.I ?? 0, r.A ?? 0,
+      sel('H'), sel('S'), sel('I'), sel('A'),
     ];
   });
 
@@ -205,11 +214,21 @@ export async function buildJurnalBulananPDF({ sekolah, guru, ym, list }) {
     didDrawPage: (data) => { if (data.pageNumber > 1) kopLanjutan(); },
   });
 
-  // ── Blok tanda tangan ──
-  const BLOK_H = 42;
+  // ── Catatan kelas gabungan + blok tanda tangan ──
+  // Rombel setingkat belajar di satu ruang: satu pertemuan dicatat sekali,
+  // kehadirannya dirinci per rombel pada baris yang bersesuaian.
+  const adaGabungan = rows.some(j => rombelDoc(j).length > 1);
+  const BLOK_H = 42 + (adaGabungan ? 8 : 0);
   let y = (doc.lastAutoTable?.finalY || 58) + 10;
   // Jangan sampai blok tanda tangan terpotong: pindahkan utuh ke halaman baru.
   if (y + BLOK_H > PH - 14) { doc.addPage(); kopLanjutan(); y = 24; }
+  if (adaGabungan) {
+    doc.setFont('helvetica', 'italic').setFontSize(7.5).setTextColor(90, 90, 90);
+    doc.text('Catatan: rombel setingkat belajar dalam satu ruang, sehingga satu pertemuan dicatat sekali. '
+      + 'Kolom Rombel dan Kehadiran dirinci per rombel pada baris yang sama.', M, y, { maxWidth: PW - 2 * M });
+    doc.setTextColor(0, 0, 0);
+    y += 8;
+  }
 
   const kota = wa(sekolah.kota || '').trim();
   const tglCetak = fmtTanggal(dk());
